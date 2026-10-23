@@ -1,5 +1,5 @@
 // Field Ops service worker: lets the app open with no signal, and keeps aerial photo tiles on the phone.
-const APP = 'fieldops-app-v5';
+const APP = 'fieldops-app-v6';
 const TILES = 'fieldops-tiles-v1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 const TILE_HOSTS = ['server.arcgisonline.com', 'clarity.maptiles.arcgis.com', 'tnmap.tn.gov', 'basemap.nationalmap.gov', 'fonts.googleapis.com', 'fonts.gstatic.com'];
@@ -36,8 +36,12 @@ self.addEventListener('fetch', (e) => {
   // The app itself: try the network so updates show up, fall back to the saved copy with no signal
   if (url.origin === self.location.origin) {
     e.respondWith((async () => {
-      try { const res = await fetch(req); if (res.ok) { const c = await caches.open(APP); c.put(req, res.clone()); } return res; }
-      catch (err) { const hit = await caches.match(req, { ignoreSearch: true }) || (req.mode === 'navigate' ? await caches.match('./index.html') : null); if (hit) return hit; throw err; }
+      const saved = async () => (await caches.match(req, { ignoreSearch: true })) || (req.mode === 'navigate' ? await caches.match('./index.html') : null);
+      const net = fetch(req).then(async (res) => { if (res.ok) { const c = await caches.open(APP); c.put(req, res.clone()); } return res; });
+      // Weak signal in a field: don't sit on a slow network, open the saved copy after 4 seconds
+      const timeout = new Promise((r) => setTimeout(r, 4000)).then(saved);
+      try { const first = await Promise.race([net, timeout]); if (first) return first; return await net; }
+      catch (err) { const hit = await saved(); if (hit) return hit; throw err; }
     })());
   }
 });

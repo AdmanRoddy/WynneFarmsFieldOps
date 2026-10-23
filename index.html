@@ -39,15 +39,18 @@
   color-scheme: light;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; margin: 0; }
+:root { --app-h: 100vh; }
+@supports (height: 100dvh) { :root { --app-h: 100dvh; } }
+html, body { height: var(--app-h); margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-ui); overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
 button, input, select { font: inherit; color: inherit; }
+button > *, button small, button span { pointer-events: none; }
 button { cursor: pointer; }
 input, select { -webkit-user-select: text; user-select: text; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .hidden { display: none !important; }
 
-#app { height: 100%; display: grid; grid-template-rows: auto auto 1fr auto auto; }
+#app { height: var(--app-h); display: grid; grid-template-rows: auto auto 1fr auto auto; }
 #app > * { min-width: 0; }
 
 /* ---- Guidance bar ---- */
@@ -132,7 +135,7 @@ button.st { cursor: pointer; }
 .ab[disabled] { opacity: .45; }
 
 /* ---- Home sheet ---- */
-#home { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+#home { position: fixed; left: 0; right: 0; top: 0; height: var(--app-h); z-index: 20; background: var(--bg); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
 .hhead { display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #10301c, #1b4d2e); color: var(--cream); padding: 10px max(14px, env(safe-area-inset-left, 0px)); border-bottom: 3px solid var(--gold); }
 .hlogo { height: 58px; width: auto; display: block; filter: drop-shadow(0 2px 6px #0008); }
 .brand { font: 700 13px/1.05 var(--font-head); letter-spacing: .12em; text-transform: uppercase; color: var(--cream); white-space: nowrap; min-width: 0; }
@@ -141,7 +144,7 @@ button.st { cursor: pointer; }
 .tabs { display: flex; background: var(--card); border-bottom: 1px solid var(--line); }
 .tabs button { flex: 1; background: none; border: 0; padding: 12px 4px; font: 600 15px var(--font-head); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-bottom: 3px solid transparent; }
 .tabs button.active { color: var(--red-soft); border-bottom-color: var(--red-soft); }
-.tp { display: none; flex: 1; overflow-y: auto; padding: 14px max(14px, env(safe-area-inset-left, 0px)) 30px; flex-direction: column; gap: 12px; }
+.tp { display: none; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 14px max(14px, env(safe-area-inset-right, 0px)) calc(30px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); flex-direction: column; gap: 12px; }
 .tp.active { display: flex; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .card h3 { margin: 0; font: 700 17px/1.2 var(--font-head); letter-spacing: .03em; display: flex; align-items: center; gap: 8px; }
@@ -229,6 +232,7 @@ h4.sub { margin: 4px 0 0; font: 700 14px var(--font-head); letter-spacing: .06em
   <main id="stage">
     <canvas id="cv"></canvas>
     <div id="haze"></div>
+    <video id="keepAwake" playsinline muted loop preload="auto" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" src="data:video/mp4;base64,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"></video>
     <div id="mapMsg" class="hidden"></div>
     <div id="zoomBtns"><button id="zIn" aria-label="Zoom in">+</button><button id="zOut" aria-label="Zoom out">−</button><button id="zFollow" class="hidden" aria-label="Follow">◎</button></div>
     <div id="retArrow" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V4M5 11l7-7 7 7"/></svg><span id="retTxt"></span></div>
@@ -270,7 +274,7 @@ h4.sub { margin: 4px 0 0; font: 700 14px var(--font-head); letter-spacing: .06em
       <div class="fld"><label for="cName">Name</label><input id="cName" maxlength="28" placeholder="Bush hog, spreader, drill"></div>
       <div class="g2">
         <div class="fld"><label for="cSec">How many sections</label><select id="cSec"></select></div>
-        <div class="fld"><label for="cAll">Same width for all</label><div class="len"><input id="cAll" inputmode="text" placeholder="Width"><select id="cAllU" class="lu"></select></div></div>
+        <div class="fld"><label for="cAll">Same width for all</label><div class="len"><input id="cAll" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="Width"><select id="cAllU" class="lu"></select></div></div>
       </div>
       <div class="g2" id="cWidths"></div>
       <div class="tot"><span>Total width</span><span class="ww" id="cWW"></span><small>Your passes are spaced this far apart.</small></div>
@@ -278,11 +282,11 @@ h4.sub { margin: 4px 0 0; font: 700 14px var(--font-head); letter-spacing: .06em
       <h4 class="sub">Where the implement sits</h4>
       <div class="g2">
         <div class="fld"><label for="cInlDir">Front to back</label><select id="cInlDir"><option value="1">Behind the phone</option><option value="-1">In front of the phone</option></select></div>
-        <div class="fld"><label for="cInl">How far</label><div class="len"><input id="cInl" inputmode="text"><select id="cInlU" class="lu"></select></div></div>
+        <div class="fld"><label for="cInl">How far</label><div class="len"><input id="cInl" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><select id="cInlU" class="lu"></select></div></div>
       </div>
       <div class="g2">
         <div class="fld"><label for="cLatDir">Side to side</label><select id="cLatDir"><option value="0">Centered on the phone</option><option value="1">Shifted to the right</option><option value="-1">Shifted to the left</option></select></div>
-        <div class="fld"><label for="cLat">How far</label><div class="len"><input id="cLat" inputmode="text"><select id="cLatU" class="lu"></select></div></div>
+        <div class="fld"><label for="cLat">How far</label><div class="len"><input id="cLat" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><select id="cLatU" class="lu"></select></div></div>
       </div>
       <div class="note">Measure from where the phone is mounted to the middle of the implement. Most pull behind equipment is behind and centered.</div>
       <button class="btn redline" id="mDel">Delete this machine</button>
@@ -290,7 +294,7 @@ h4.sub { margin: 4px 0 0; font: 700 14px var(--font-head); letter-spacing: .06em
     <div class="card">
       <h3>Lightbar</h3>
       <div class="g2">
-        <div class="fld"><label for="cSpacing">Each light means</label><div class="len"><input id="cSpacing" inputmode="text"><select id="cSpacingU" class="lu"></select></div></div>
+        <div class="fld"><label for="cSpacing">Each light means</label><div class="len"><input id="cSpacing" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><select id="cSpacingU" class="lu"></select></div></div>
         <div class="fld"><label for="cEdge">Trace boundaries at</label><select id="cEdge"><option value="center">Middle of implement</option><option value="left">Left edge</option><option value="right">Right edge</option></select></div>
       </div>
       <label class="sw"><span class="lb">Don't paint over covered ground<small>A section stops painting when it's over ground you already covered. This only affects the map. It can't switch your equipment.</small></span><input type="checkbox" id="cAuto"></label>
@@ -300,7 +304,7 @@ h4.sub { margin: 4px 0 0; font: 700 14px var(--font-head); letter-spacing: .06em
       <div class="g2">
         <div class="fld"><label for="cSmooth">Steady the GPS</label><select id="cSmooth"><option value="strong">More steady</option><option value="normal">Normal</option><option value="light">Quicker to react</option><option value="off">Off (raw GPS)</option></select></div>
         <div class="fld"><label for="cDemo">Position from</label><select id="cDemo"><option value="0">Phone GPS</option><option value="1">Practice mode</option></select></div>
-        <div class="fld"><label for="cMaxAcc">Only paint when GPS is within</label><div class="len"><input id="cMaxAcc" inputmode="text"><select id="cMaxAccU" class="lu"></select></div></div>
+        <div class="fld"><label for="cMaxAcc">Paint only if GPS within</label><div class="len"><input id="cMaxAcc" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><select id="cMaxAccU" class="lu"></select></div></div>
       </div>
       <div class="note">An iPhone out in the open is usually good to about <b>10 to 15 ft</b>, so expect a few feet of overlap or skip between passes. That's fine for mowing, bush hogging and spreading. It's not tight enough for narrow row work. A Bluetooth GPS receiver that iOS can use (Bad Elf, Garmin GLO and similar) works with this app automatically and tightens it up.</div>
       <div class="note"><b>Practice mode</b> drives a pretend tractor so you can try everything in the yard.</div>
@@ -382,8 +386,10 @@ const norm = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v
 
 // ---------- Settings & profiles ----------
 function load(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
-const DEF = { theme: 'dark', units: 'us', spacing: 0.3048, infoL: 'speed', infoR: 'area', profile: 0, sat: true, opacity: 70, tilt: false, beeps: true, autoSec: false, edge: 'center', maxAcc: 6, smooth: 'normal', wake: true, demo: false, job: 1, view: 'vehicle', zoomV: 0, zoomF: 0 };
+const DEF = { theme: 'dark', units: 'us', spacing: 0.3048, infoL: 'speed', infoR: 'area', profile: 0, sat: true, opacity: 70, tilt: false, beeps: true, autoSec: false, edge: 'center', maxAcc: 9.144, smooth: 'normal', wake: true, demo: false, job: 1, view: 'vehicle', zoomV: 0, zoomF: 0 };
 const S = Object.assign({}, DEF, load('wfo.settings', {}));
+if ((S.maxAcc === 6 || S.maxAcc === 10) && !(S.u && S.u.maxAcc)) S.maxAcc = 9.144; // old default was too strict for a phone
+S.jobNames = S.jobNames || {};
 const saveS = () => { try { localStorage.setItem('wfo.settings', JSON.stringify(S)); } catch (e) {} };
 const defProf = (i) => ({ name: 'Machine ' + (i + 1), n: 3, w: [3.048, 3.048, 3.048, 3.048, 3.048, 3.048, 3.048], lat: 0, inl: 2.5, u: {} });
 let P = load('wfo.profiles', null);
@@ -419,7 +425,7 @@ function parseLen(str, unit) {
   if ((m = t.match(/^(\d*\.?\d+)$/))) return { m: +m[1] * UNITM[unit], unit, typed: false, raw: +m[1] };
   return null;
 }
-function inUnit(m, unit) { const v = m / UNITM[unit]; return +v.toFixed(unit === 'in' || unit === 'cm' ? 1 : 2); }
+function inUnit(m, unit) { const v = m / UNITM[unit]; return +v.toFixed(unit === 'in' || unit === 'cm' ? 1 : v >= 20 ? 1 : 2); }
 function fmtSpd(ms) { return US() ? (ms * 2.23694).toFixed(1) + ' mph' : (ms * 3.6).toFixed(1) + ' km/h'; }
 function fmtDur(ms) { const s = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${m}:${String(ss).padStart(2, '0')}`; }
 
@@ -603,9 +609,9 @@ function onFix(fx) {
     if (job.mode === 'nextrow') stepNextRow(pose);
     if (job.bRec) stepBoundary(pose);
     if (mapping && prevPose && good) paintStep(prevPose, pose);
-    if (mapping && good && prevPose && pose.spd > 0.3) job.time += Math.min(5000, Math.max(0, fx.t - prevPose.t));
+    if (mapping && good && prevPose && pose.spd > 0.3) { job.time += Math.min(5000, Math.max(0, fx.t - prevPose.t)); jobDirty = true; }
   }
-  updateOverlap(); jobDirty = true;
+  updateOverlap();
   if (follow || S.view === 'vehicle') snapView();
 }
 function paintStep(a, b) {
@@ -615,7 +621,7 @@ function paintStep(a, b) {
   for (let i = 0; i < A.pts.length - 1; i++) { if (!secOn[i] || secSkip[i]) continue; paintQuad([A.pts[i], A.pts[i + 1], B.pts[i + 1], B.pts[i]]); }
   covDirty = true;
   const c = B.c, tr = job.track, last = tr[tr.length - 1];
-  if (!last || Math.hypot(c[0] - last[0], c[1] - last[1]) >= 1) { tr.push([Math.round(c[0] * 100) / 100, Math.round(c[1] * 100) / 100, Date.now()]); tIndex(tr.length - 1); }
+  if (!last || Math.hypot(c[0] - last[0], c[1] - last[1]) >= 1) { tr.push([Math.round(c[0] * 100) / 100, Math.round(c[1] * 100) / 100, Date.now()]); tIndex(tr.length - 1); jobDirty = true; }
 }
 let beepAt = 0;
 function updateOverlap() {
@@ -671,15 +677,15 @@ function markRowEnd() {
 }
 function stepNextRow(p) {
   const nr = job.nr; if (!nr) return; const W = WW(); const u = norm([nr.B[0] - nr.A[0], nr.B[1] - nr.A[1]]); const G = gp(p); const d = (G[0] - nr.A[0]) * u[1] - (G[1] - nr.A[1]) * u[0];
-  if (nr.phase === 'turn') { if (Math.abs(d) > 0.3 * W) { nr.side = Math.sign(d); nr.phase = 'guide'; nr.ok = 0; nr.nudge = 0; } }
-  else if (nr.phase === 'guide') { const xte = d - nr.side * W - (nr.nudge || 0); const al = Math.abs(fwd(p.h)[0] * u[0] + fwd(p.h)[1] * u[1]); nr.ok = (Math.abs(xte) < 0.25 * W && al > Math.cos(25 * D2R) && p.spd > 0.2) ? nr.ok + 1 : 0; if (nr.ok >= (demoOn() ? 15 : 3)) { nr.phase = 'inrow'; crumbs = [G]; beep(1); } }
+  if (nr.phase === 'turn') { if (Math.abs(d) > 0.3 * W) { nr.side = Math.sign(d); nr.phase = 'guide'; nr.ok = 0; nr.nudge = 0; jobDirty = true; } }
+  else if (nr.phase === 'guide') { const xte = d - nr.side * W - (nr.nudge || 0); const al = Math.abs(fwd(p.h)[0] * u[0] + fwd(p.h)[1] * u[1]); nr.ok = (Math.abs(xte) < 0.25 * W && al > Math.cos(25 * D2R) && p.spd > 0.2) ? nr.ok + 1 : 0; if (nr.ok >= (demoOn() ? 15 : 3)) { nr.phase = 'inrow'; crumbs = [G]; beep(1); jobDirty = true; } }
 }
 // ---------- Boundary ----------
 function boundaryPt(p) { if (S.edge === 'center') { const c = implPts(p).c; return c; } const im = implPts(p); return S.edge === 'left' ? im.pts[0] : im.pts[im.pts.length - 1]; }
 function startBoundary() { if (!pose) { toast('Waiting for GPS'); return; } const b = boundaryPt(pose); job.bRec = { pts: [b], dist: 0 }; jobDirty = true; toast('Recording the boundary. Drive the field edge.'); closeMenus(); }
 function stepBoundary(p) {
   const r = job.bRec, b = boundaryPt(p), last = r.pts[r.pts.length - 1], dd = Math.hypot(b[0] - last[0], b[1] - last[1]); if (dd < 1) return;
-  r.pts.push(b); r.dist += dd; const s = r.pts[0];
+  r.pts.push(b); r.dist += dd; jobDirty = true; const s = r.pts[0];
   if (r.dist >= 5 * WW() && r.pts.length > 6 && Math.hypot(b[0] - s[0], b[1] - s[1]) <= WW()) finishBoundary(true);
 }
 function finishBoundary(auto) { const r = job.bRec; if (!r) return; if (r.dist < 5 * WW()) { toast(`Keep going about ${fmtL(5 * WW() - r.dist, 0)} first`); return; } job.boundary = { pts: simplify(r.pts, 0.2) }; job.bRec = null; jobDirty = true; beep(1); toast((auto ? 'Boundary closed itself. ' : 'Boundary saved. ') + fmtA(polyArea(job.boundary.pts)) + ' inside.'); closeMenus(); }
@@ -690,7 +696,8 @@ function insideBoundary(p) { return job.boundary ? inPoly(job.boundary.pts, ...i
 // Audio
 // ============================================================================
 let actx = null;
-document.addEventListener('pointerdown', () => { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }, true);
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} // beeps still sound with the ringer switch on silent
+document.addEventListener('pointerdown', () => { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} if (S.wake && !wakeLock && typeof wake === 'function') wake(); }, true);
 function beep(n) { if (!S.beeps || !actx) return; const t0 = actx.currentTime; for (let i = 0; i < n; i++) { const o = actx.createOscillator(), g = actx.createGain(); o.type = 'square'; o.frequency.value = 2100; g.gain.setValueAtTime(0.0001, t0 + i * 0.2); g.gain.exponentialRampToValueAtTime(0.25, t0 + i * 0.2 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.2 + 0.12); o.connect(g); g.connect(actx.destination); o.start(t0 + i * 0.2); o.stop(t0 + i * 0.2 + 0.14); } }
 
 // ============================================================================
@@ -700,9 +707,19 @@ const canvas = $('cv'), ctx = canvas.getContext('2d');
 let dpr = 1, W = 0, H = 0; const view = { cx: 0, cy: 0, scale: 6, rot: 0 }; let follow = true;
 // 3D view: the canvas is a big ground plane tipped back with a CSS perspective transform. It's sized so the tipped
 // plane covers the whole screen, side to side and up to the top, with a little haze hiding the far edge.
+// iPhone home-screen apps sometimes report a viewport shorter than the screen, which left a dead band at the bottom.
+function setAppH() {
+  const st = navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  let h = window.innerHeight;
+  if (st && window.screen) { const portrait = window.innerHeight >= window.innerWidth; const a = screen.width, b = screen.height; h = Math.max(h, portrait ? Math.max(a, b) : Math.min(a, b)); }
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+}
 const TILT = { deg: 40 }; let SW = 1, SH = 1, vehUp = 0;
+let lastSize = '';
 function resize() {
+  setAppH();
   const r = $('stage').getBoundingClientRect(); SW = Math.max(1, r.width); SH = Math.max(1, r.height); const tl = S.view === 'vehicle' && S.tilt;
+  const key = `${Math.round(SW)}x${Math.round(SH)}:${tl}:${window.devicePixelRatio}`; if (key === lastSize) { setScale(); snapView(); needRender = true; return; } lastSize = key;
   $('stage').classList.toggle('tilted', tl);
   if (tl) {
     const th = TILT.deg * D2R, cs = Math.cos(th), sn = Math.sin(th), p = 1.6 * SH;
@@ -727,7 +744,7 @@ function snapView() {
   if (S.view === 'vehicle') { view.rot += angDiff(p.h, view.rot) * (demoOn() ? 0.35 : 0.25); const ahead = (S.tilt ? H / 2 - vehUp : H * 0.2) / view.scale, f = fwd(view.rot); view.cx = p.E + f[0] * ahead; view.cy = p.N + f[1] * ahead; }
   else { view.rot = 0; if (follow) { view.cx = p.E; view.cy = p.N; } }
 }
-function cssv(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+const cssCache = {}; function cssv(n) { return cssCache[n] || (cssCache[n] = getComputedStyle(document.documentElement).getPropertyValue(n).trim()); }
 function render() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = cssv('--field'); ctx.fillRect(0, 0, W, H);
@@ -838,7 +855,7 @@ function getTile(z, x, y) {
   if (t) { if (t.dead && Date.now() - t.dead > (t.offline ? 20000 : 180000)) { tileCache.delete(k); t = null; } else return t; } // retry after a while (signal may be back)
   if (inflight > 16) return null;
   t = { img: null, ok: false, dead: 0, chain: srcChain(z, x, y), i: 0, cors: true }; tileCache.set(k, t); loadTile(t, z, x, y);
-  if (tileCache.size > 700) { for (const [kk, v] of tileCache) { if (v !== t) { tileCache.delete(kk); break; } } }
+  if (tileCache.size > 320) { for (const [kk, v] of tileCache) { if (v !== t) { tileCache.delete(kk); break; } } }
   return t;
 }
 function loadTile(t, z, x, y) {
@@ -904,11 +921,12 @@ function infoVal(k, g) {
   switch (k) { case 'speed': return pose ? fmtSpd(pose.spd) : ''; case 'area': return cov && cov.cell ? fmtA(cov.tot * cov.cell ** 2) : fmtA(0); case 'net': return cov && cov.cell ? fmtA(cov.net * cov.cell ** 2) : fmtA(0);
     case 'time': return fmtDur(job.time); case 'swath': return g && g.n != null ? String(g.n) : ''; case 'acc': return gnss ? fmtL(gnss.acc, US() ? 0 : 1) : ''; default: return ''; }
 }
-function setInfo(el, k, g) { el.querySelector('.l').textContent = INFO[k]; el.querySelector('.v').textContent = k === 'none' ? '' : infoVal(k, g); }
+function setInfo(el, k, g) { setT(el.querySelector('.l'), INFO[k]); setT(el.querySelector('.v'), k === 'none' ? '' : infoVal(k, g)); }
 function activity(g) {
   if (!gnss) return demoOn() ? 'Tap + to start driving' : 'Tap GPS to start';
   if (performance.now() - gnssAt > 5000) return 'Lost GPS';
   if (transport) return 'Road mode';
+  if (mapping && gnss.acc > Math.max(S.maxAcc, 0.5)) return 'GPS too rough to paint';
   if (retGuide && job.ret) return 'Heading to pin';
   if (job.marking) return job.marking.dist < minB() ? `Keep going ${fmtL(minB() - job.marking.dist, 0)}` : 'Tap Set B';
   if (job.mode === 'none') return 'Guidance off';
@@ -918,14 +936,16 @@ function activity(g) {
   return null;
 }
 let lastUI = 0, relS = null;
+const setH = (el, h) => { if (el._h !== h) { el._h = h; el.innerHTML = h; } }, setT = (el, t) => { if (el._t !== t) { el._t = t; el.textContent = t; } }, setC = (el, c) => { if (el._c !== c) { el._c = c; el.className = c; } };
 function updateUI() {
   const p = drPose(); const g = p ? guide(p) : null; const act = activity(g); const box = lb.children; const xe = $('xte');
-  for (let i = 0; i < 15; i++) box[i].className = i === 7 ? 'c' : '';
+  const cls = Array.from({ length: 15 }, (_, i) => i === 7 ? 'c' : '');
   if (!act && g && p) {
     const rel0 = relXte(g, p); relS = relS == null || Math.abs(rel0 - relS) > 3 ? rel0 : relS + (rel0 - relS) * 0.45; const rel = relS, sp = Math.max(0.02, S.spacing), k = clamp(Math.round(Math.abs(rel) / sp), 0, 7);
-    if (k === 0) box[7].className = 'c ok'; else for (let j = 1; j <= k; j++) { const idx = rel > 0 ? 7 - j : 7 + j; box[idx].className = j >= 5 ? 'far' : 'on'; }
-    xe.className = ''; xe.innerHTML = k === 0 ? `<span>${fmtXte(rel)}</span>` : rel > 0 ? `<span class="arw">◀</span><span>${fmtXte(rel)}</span>` : `<span>${fmtXte(rel)}</span><span class="arw">▶</span>`;
-  } else { xe.className = act === 'Lost GPS' ? 'act blink' : 'act'; xe.textContent = act || ''; }
+    if (k === 0) cls[7] = 'c ok'; else for (let j = 1; j <= k; j++) { const idx = rel > 0 ? 7 - j : 7 + j; cls[idx] = j >= 5 ? 'far' : 'on'; }
+    setC(xe, ''); setH(xe, k === 0 ? `<span>${fmtXte(rel)}</span>` : rel > 0 ? `<span class="arw">◀</span><span>${fmtXte(rel)}</span>` : `<span>${fmtXte(rel)}</span><span class="arw">▶</span>`);
+  } else { setC(xe, act === 'Lost GPS' ? 'act blink' : 'act'); setH(xe, (act || '').replace(/[&<]/g, '')); }
+  for (let i = 0; i < 15; i++) setC(box[i], cls[i]);
   setInfo($('infoL'), S.infoL, g); setInfo($('infoR'), S.infoR, g);
   // status
   const sg = $('sGnss'); sg.classList.remove('good', 'fair', 'bad'); let gt;
@@ -933,19 +953,19 @@ function updateUI() {
   else if (!gpsOn) gt = 'GPS off, tap';
   else if (!gnss) { gt = 'GPS…'; sg.classList.add('bad'); }
   else { const stale = performance.now() - gnssAt > 5000; gt = (stale ? 'lost ' : 'GPS ') + fmtL(gnss.acc, 0); sg.classList.add(stale || gnss.acc > 10 ? 'bad' : gnss.acc > 4 ? 'fair' : 'good'); }
-  $('sGnssTxt').textContent = gt; $('sMode').textContent = MODES[job.mode].ab + (retGuide ? ' · PIN' : '');
-  const inb = p ? insideBoundary(p) : null; $('sBound').classList.toggle('hidden', inb == null); $('sBound').textContent = inb ? 'IN' : 'OUT';
-  const sm = $('sMap'); sm.textContent = mapping ? 'PAINT ON' : 'PAINT OFF'; sm.className = 'st ' + (mapping ? 'on' : 'off'); $('sJob').textContent = (job.name || 'Job ' + job.n).toUpperCase(); $('sProf').textContent = `${prof().name} · ${fmtFtIn(WW())}`;
+  setT($('sGnssTxt'), gt); setT($('sMode'), MODES[job.mode].ab + (retGuide ? ' · PIN' : ''));
+  const inb = p ? insideBoundary(p) : null; $('sBound').classList.toggle('hidden', inb == null); setT($('sBound'), inb ? 'IN' : 'OUT');
+  const sm = $('sMap'); setT(sm, mapping ? 'PAINT ON' : 'PAINT OFF'); setC(sm, 'st ' + (mapping ? 'on' : 'off')); setT($('sJob'), (job.name || 'Job ' + job.n).toUpperCase()); setT($('sProf'), `${prof().name} · ${fmtFtIn(WW())}`);
   // actions
   const bm = $('bMark'); bm.disabled = transport || job.mode === 'none' || job.mode === 'lastpass';
-  if (job.mode === 'nextrow') { bm.className = 'ab b'; bm.innerHTML = 'End row'; }
-  else if (job.marking) { const ok = job.marking.dist >= minB(); bm.className = 'ab b'; bm.innerHTML = ok ? 'Set B' : `Set B<small>${fmtL(job.marking.dist, 0)} of ${fmtL(minB(), 0)}</small>`; }
-  else { bm.className = 'ab a'; bm.innerHTML = job.lines[job.mode] ? 'Set A<small>new line</small>' : 'Set A'; }
+  if (job.mode === 'nextrow') { setC(bm, 'ab b'); setH(bm, 'End row'); }
+  else if (job.marking) { const ok = job.marking.dist >= minB(); setC(bm, 'ab b'); setH(bm, ok ? 'Set B' : `Set B<small>${fmtL(job.marking.dist, 0)} of ${fmtL(minB(), 0)}</small>`); }
+  else { setC(bm, 'ab a'); setH(bm, job.lines[job.mode] ? 'Set A<small>new line</small>' : 'Set A'); }
   $('bNudge').disabled = !g || transport || job.mode === 'lastpass';
-  const bp = $('bMap'); bp.className = 'ab ' + (mapping ? 'mapon' : 'mapoff'); bp.innerHTML = `Paint<small>${mapping ? 'on' : 'off'}</small>`; bp.disabled = transport;
-  const bt = $('bTrans'); bt.className = 'ab' + (transport ? ' trans' : ''); bt.innerHTML = transport ? 'Road<small>tap for field</small>' : 'Field<small>mode</small>';
+  const bp = $('bMap'); setC(bp, 'ab ' + (mapping ? 'mapon' : 'mapoff')); setH(bp, `Paint<small>${mapping ? 'on' : 'off'}</small>`); bp.disabled = transport;
+  const bt = $('bTrans'); setC(bt, 'ab' + (transport ? ' trans' : '')); setH(bt, transport ? 'Road<small>tap for field</small>' : 'Field<small>mode</small>');
   // return-to-point arrow
-  const ra = $('retArrow'); if (retGuide && job.ret && p) { ra.classList.remove('hidden'); const dE = job.ret.E - p.E, dN = job.ret.N - p.N; const brg = Math.atan2(dE, dN); ra.querySelector('svg').style.transform = `rotate(${(brg - (S.view === 'vehicle' ? view.rot : 0)) / D2R}deg)`; $('retTxt').textContent = fmtL(Math.hypot(dE, dN), 0); } else ra.classList.add('hidden');
+  const ra = $('retArrow'); if (retGuide && job.ret && p) { ra.classList.remove('hidden'); const dE = job.ret.E - p.E, dN = job.ret.N - p.N; const brg = Math.atan2(dE, dN); ra.querySelector('svg').style.transform = `rotate(${(brg - (S.view === 'vehicle' ? view.rot : 0)) / D2R}deg)`; setT($('retTxt'), fmtL(Math.hypot(dE, dN), 0)); } else ra.classList.add('hidden');
 }
 function renderBoom() {
   const b = $('boom'), n = prof().n, ws = widths(); if (b.children.length !== n) { b.innerHTML = ''; for (let i = 0; i < n; i++) { const e = document.createElement('button'); e.textContent = i + 1; e.onclick = () => { secOn[i] = !secOn[i]; renderBoom(); }; b.appendChild(e); } }
@@ -955,10 +975,10 @@ $('infoL').onclick = () => { S.infoL = INFO_ORDER[(INFO_ORDER.indexOf(S.infoL) +
 $('infoR').onclick = () => { S.infoR = INFO_ORDER[(INFO_ORDER.indexOf(S.infoR) + 1) % INFO_ORDER.length]; saveS(); updateUI(); };
 $('bMark').onclick = () => { if (job.mode === 'nextrow') markRowEnd(); else if (job.marking) markB(); else markA(); };
 $('bNudge').onclick = nudge;
-function setMapping(v) { mapping = v; if (v && !cov.cell) cov.cell = clamp(Math.round(WW() / 24 / 0.05) * 0.05, 0.15, 0.75); updateOverlap(); updateUI(); }
+function setMapping(v) { if (v && transport) { toast('Switch to Field mode to paint'); return; } mapping = v; if (v && !cov.cell) cov.cell = clamp(Math.round(WW() / 24 / 0.05) * 0.05, 0.15, 0.75); updateOverlap(); updateUI(); }
 $('bMap').onclick = () => setMapping(!mapping); $('sMap').onclick = () => setMapping(!mapping);
 $('bTrans').onclick = () => { transport = !transport; if (transport) { mapping = false; job.marking = null; } toast(transport ? 'Road mode. Guidance and painting are off.' : 'Field mode'); updateOverlap(); updateUI(); };
-$('sJob').onclick = () => openHome('job'); $('sLogo').onclick = () => openHome('console'); $('sProf').onclick = () => { $('optTab').classList.add('hidden'); sub('mach', true); }; $('sGnss').onclick = () => { if (demoOn()) return; gpsOn ? stopGPS() : startGPS(); };
+$('sJob').onclick = () => openHome('job'); $('sLogo').onclick = () => openHome('console'); $('sProf').onclick = () => { $('optTab').classList.add('hidden'); sub('mach', true); }; $('sGnss').onclick = () => { if (demoOn()) { toast('Practice mode. Switch to Phone GPS on the Machines tab.'); return; } if (!gpsOn) { startGPS(); return; } if (confirm('Turn GPS off?')) stopGPS(); };
 let toastT; function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200); }
 
 // ---------- Navigation & guidance options tab ----------
@@ -1022,12 +1042,18 @@ $('zIn').onclick = () => zoom(1); $('zOut').onclick = () => zoom(-1); $('zFollow
 let gpsOn = false, watchId = null, wakeLock = null, lastRestart = 0;
 const demoOn = () => !!S.demo;
 function onPos(pos) { const c = pos.coords; if (Date.now() - pos.timestamp > 15000) return; if (demoOn()) return;
-  onFix({ lat: c.latitude, lon: c.longitude, acc: c.accuracy || 50, speed: c.speed == null || isNaN(c.speed) ? null : c.speed, heading: c.heading == null || isNaN(c.heading) ? null : c.heading, t: pos.timestamp || Date.now() }); }
+  const ok = (v) => v != null && !isNaN(v) && v >= 0;
+  onFix({ lat: c.latitude, lon: c.longitude, acc: c.accuracy || 50, speed: ok(c.speed) ? c.speed : null, heading: ok(c.heading) && ok(c.speed) ? c.heading : null, t: pos.timestamp || Date.now() }); }
 function onPosErr(err) { if (err.code === 1) { toast('Location is blocked. Turn it on in Settings, Safari, Location.'); stopGPS(); } }
 function startWatch() { if (watchId != null) navigator.geolocation.clearWatch(watchId); watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }); lastRestart = Date.now(); }
 async function startGPS() { if (gpsOn || demoOn()) return; if (!navigator.geolocation) { toast('No geolocation in this browser'); return; } gpsOn = true; localStorage.setItem('wfo.gps', '1'); startWatch(); wake(); updateUI(); }
 function stopGPS() { if (watchId != null) navigator.geolocation.clearWatch(watchId); watchId = null; gpsOn = false; localStorage.setItem('wfo.gps', '0'); updateUI(); }
-async function wake() { if (S.wake && 'wakeLock' in navigator && !wakeLock) { try { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } catch (e) {} } }
+async function wake() {
+  if (!S.wake || document.visibilityState !== 'visible') return;
+  if ('wakeLock' in navigator && !wakeLock) { try { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } catch (e) {} }
+  if (!wakeLock) { const v = $('keepAwake'); if (v && v.paused) { try { await v.play(); } catch (e) {} } } // fallback, needs a tap first
+}
+function unwake() { if (wakeLock) { wakeLock.release(); wakeLock = null; } const v = $('keepAwake'); if (v && !v.paused) v.pause(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (gpsOn) startWatch(); wake(); } else saveAll(); });
 window.addEventListener('pagehide', saveAll);
 
@@ -1060,7 +1086,7 @@ $('simUL').onclick = () => { sim.turn = { dir: -1, R: WW() / 2, left: Math.PI };
 // Jobs: load / save / switch / export
 // ============================================================================
 async function loadJob(n) {
-  const j = await idb.get('kv', 'job:' + n); job = Object.assign(newJob(n), j || {}); job.n = n; job.marking = null;
+  const j = await idb.get('kv', 'job:' + n); job = Object.assign(newJob(n), j || {}); job.n = n; job.marking = null; if (job.name) S.jobNames[n] = job.name;
   const c = await idb.get('kv', 'cov:' + n); cov = covNew();
   if (c && c.cell) { cov.cell = c.cell; for (const [k, counts] of c.tiles) { const [tx, ty] = k.split(',').map(Number); const t = makeTile(tx, ty, counts); cov.tiles.set(k, t); for (let i = 0; i < counts.length; i++) if (counts[i]) { cov.net++; cov.tot += counts[i]; } } }
   tGrid = new Map(); job.track.forEach((_, i) => tIndex(i));
@@ -1069,7 +1095,7 @@ async function loadJob(n) {
   if (job.origin && S.view === 'field') fitJob(); updateUI(); needRender = true;
 }
 async function saveAll() { if (jobDirty) { jobDirty = false; const j = { ...job }; await idb.set('kv', JSON.parse(JSON.stringify(j)), 'job:' + job.n); } if (covDirty && cov.cell) { covDirty = false; await idb.set('kv', { cell: cov.cell, tiles: [...cov.tiles.entries()].map(([k, t]) => [k, t.counts]) }, 'cov:' + job.n); } }
-setInterval(() => { if (jobDirty) saveAll(); }, 4000);
+setInterval(() => { if (jobDirty) saveAll(); }, 6000);
 setInterval(() => { if (covDirty) saveAll(); }, 10000);
 function jobBounds() { let b = [Infinity, Infinity, -Infinity, -Infinity]; const ext = (x, y) => { b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y); };
   if (cov.cell) for (const t of cov.tiles.values()) { const s = T * cov.cell; ext(t.tx * s, t.ty * s); ext((t.tx + 1) * s, (t.ty + 1) * s); }
@@ -1081,10 +1107,15 @@ function refreshJobPanel() {
   $('jTot').textContent = fmtA(cov.tot * c2); $('jNet').textContent = fmtA(cov.net * c2); $('jOver').textContent = cov.tot ? ((cov.tot - cov.net) / cov.tot * 100).toFixed(1) + '%' : '0%';
   $('jBnd').textContent = job.boundary ? fmtA(polyArea(job.boundary.pts)) : 'None'; $('jName').value = job.name || ''; jobOptions(); $('jTime').textContent = fmtDur(job.time); $('jLine').textContent = lineDesc();
 }
-function download(name, data, type) { const a = document.createElement('a'); a.href = typeof data === 'string' && data.startsWith('data:') ? data : URL.createObjectURL(new Blob([data], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000); }
+async function share(name, data, type) {
+  let blob; if (typeof data === 'string' && data.startsWith('data:')) { const [h, b64] = data.split(','); const bin = atob(b64); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); blob = new Blob([u8], { type: h.slice(5).split(';')[0] }); } else blob = new Blob([data], { type });
+  try { const f = new File([blob], name, { type: blob.type }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  download(name, blob, type);
+}
+function download(name, data, type) { const a = document.createElement('a'); a.href = typeof data === 'string' && data.startsWith('data:') ? data : URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000); }
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-$('jCsv').onclick = () => { const c2 = cov.cell ? cov.cell ** 2 : 0; const rows = [['Item', 'Value'], ['Job', job.n], ['Started', new Date(job.created).toLocaleString()], ['Report', new Date().toLocaleString()], ['Field', job.name || ''], ['Machine', prof().name], ['Total width', fmtFtIn(WW())], ['Sections', prof().n], ['Total worked', fmtA(cov.tot * c2)], ['Ground covered', fmtA(cov.net * c2)], ['Overlap', cov.tot ? ((cov.tot - cov.net) / cov.tot * 100).toFixed(1) + '%' : '0%'], ['Inside boundary', job.boundary ? fmtA(polyArea(job.boundary.pts)) : ''], ['Time working', fmtDur(job.time)], ['Guidance', lineDesc()], ['Origin lat/lon', job.origin ? `${job.origin.lat.toFixed(7)} ${job.origin.lon.toFixed(7)}` : '']];
-  download(`wynne-job${job.n}-${stamp()}.csv`, rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n'), 'text/csv'); };
+$('jCsv').onclick = () => { const c2 = cov.cell ? cov.cell ** 2 : 0; const rows = [['Item', 'Value'], ['Job', job.n], ['Field', job.name || ''], ['Started', new Date(job.created).toLocaleString()], ['Report', new Date().toLocaleString()], ['Machine', prof().name], ['Total width', fmtFtIn(WW())], ['Sections', prof().n], ['Total worked', fmtA(cov.tot * c2)], ['Ground covered', fmtA(cov.net * c2)], ['Overlap', cov.tot ? ((cov.tot - cov.net) / cov.tot * 100).toFixed(1) + '%' : '0%'], ['Inside boundary', job.boundary ? fmtA(polyArea(job.boundary.pts)) : ''], ['Time working', fmtDur(job.time)], ['Guidance', lineDesc()], ['Origin lat/lon', job.origin ? `${job.origin.lat.toFixed(7)} ${job.origin.lon.toFixed(7)}` : '']];
+  share(`wynne-job${job.n}-${stamp()}.csv`, rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n'), 'text/csv'); };
 $('jGeo').onclick = () => { if (!job.origin) { toast('Nothing recorded yet'); return; } const ll = (p) => { const [la, lo] = fromENU(p[0], p[1], job.origin); return [+lo.toFixed(8), +la.toFixed(8)]; }; const F = [];
   if (job.boundary) F.push({ type: 'Feature', properties: { name: 'Boundary', area_m2: Math.round(polyArea(job.boundary.pts)) }, geometry: { type: 'Polygon', coordinates: [job.boundary.pts.concat([job.boundary.pts[0]]).map(ll)] } });
   const L = job.lines; if (L.straight) F.push({ type: 'Feature', properties: { name: 'AB line' }, geometry: { type: 'LineString', coordinates: [ll(L.straight.A), ll(L.straight.B)] } });
@@ -1092,10 +1123,10 @@ $('jGeo').onclick = () => { if (!job.origin) { toast('Nothing recorded yet'); re
   if (L.pivot) F.push({ type: 'Feature', properties: { name: 'Pivot center', radius_m: +L.pivot.R.toFixed(2) }, geometry: { type: 'Point', coordinates: ll(L.pivot.C) } });
   if (job.ret) F.push({ type: 'Feature', properties: { name: 'Return point' }, geometry: { type: 'Point', coordinates: ll([job.ret.E, job.ret.N]) } });
   if (job.track.length > 1) F.push({ type: 'Feature', properties: { name: 'Applied passes (implement center)' }, geometry: { type: 'MultiLineString', coordinates: splitTrack().map(s => s.map(ll)) } });
-  download(`wynne-job${job.n}-${stamp()}.geojson`, JSON.stringify({ type: 'FeatureCollection', features: F }), 'application/geo+json'); };
+  share(`wynne-job${job.n}-${stamp()}.geojson`, JSON.stringify({ type: 'FeatureCollection', features: F }), 'application/geo+json'); };
 function splitTrack() { const out = []; let cur = []; job.track.forEach((p, i) => { if (i && p[2] - job.track[i - 1][2] > 15000) { if (cur.length > 1) out.push(cur); cur = []; } cur.push([p[0], p[1]]); }); if (cur.length > 1) out.push(cur); return out; }
-$('jPng').onclick = () => { const keep = { ...view, v: S.view, z: S.zoomF, f: follow }; S.view = 'field'; resize(); fitJob(); render(); let url; try { url = canvas.toDataURL('image/png'); } catch (e) { const sv = S.sat; S.sat = false; render(); url = canvas.toDataURL('image/png'); S.sat = sv; } download(`wynne-job${job.n}-${stamp()}.png`, url); S.view = keep.v; S.zoomF = keep.z; follow = keep.f; Object.assign(view, { cx: keep.cx, cy: keep.cy, scale: keep.scale, rot: keep.rot }); applyView(); };
-$('jDel').onclick = async () => { if (!confirm(`Start ${job.name || 'job ' + job.n} over? This clears its coverage, lines, boundary and time.`)) return; await idb.del('kv', 'job:' + job.n); await idb.del('kv', 'cov:' + job.n); jobDirty = false; covDirty = false; await loadJob(job.n); refreshJobPanel(); toast('Cleared. Ready to start fresh.'); };
+$('jPng').onclick = () => { const keep = { ...view, v: S.view, z: S.zoomF, f: follow }; S.view = 'field'; resize(); fitJob(); render(); let url; try { url = canvas.toDataURL('image/png'); } catch (e) { const sv = S.sat; S.sat = false; render(); url = canvas.toDataURL('image/png'); S.sat = sv; } share(`wynne-job${job.n}-${stamp()}.png`, url); S.view = keep.v; S.zoomF = keep.z; follow = keep.f; Object.assign(view, { cx: keep.cx, cy: keep.cy, scale: keep.scale, rot: keep.rot }); applyView(); };
+$('jDel').onclick = async () => { if (!confirm(`Start ${job.name || 'job ' + job.n} over? This clears its coverage, lines, boundary and time.`)) return; await idb.del('kv', 'job:' + job.n); await idb.del('kv', 'cov:' + job.n); jobDirty = false; covDirty = false; await loadJob(job.n); refreshJobPanel(); delete S.jobNames[job.n]; saveS(); refreshJobPanel(); toast('Cleared. Ready to start fresh.'); };
 $('jNum').onchange = async () => { await saveAll(); S.job = +$('jNum').value; saveS(); await loadJob(S.job); refreshJobPanel(); };
 
 // ============================================================================
@@ -1106,7 +1137,7 @@ function closeHome() { $('home').classList.add('hidden'); resize(); updateUI(); 
 $('homeClose').onclick = closeHome;
 function showTab(t) { document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.t === t)); document.querySelectorAll('.tp').forEach(p => p.classList.toggle('active', p.id === 'tp-' + t)); if (t === 'job') refreshJobPanel(); }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
-function jobOptions() { const sel = $('jNum'); const keep = job.n; sel.innerHTML = ''; for (let i = 1; i <= 5; i++) sel.add(new Option(i === job.n && job.name ? job.name : 'Job ' + i, i)); sel.value = keep; }
+function jobOptions() { const sel = $('jNum'); const keep = job.n; sel.innerHTML = ''; for (let i = 1; i <= 5; i++) { const nm = i === job.n ? job.name : S.jobNames[i]; sel.add(new Option(nm ? `${i}. ${nm}` : `Job ${i}`, i)); } sel.value = keep; }
 for (let i = 1; i <= 7; i++) $('cSec').add(new Option(String(i), i));
 const num = (v) => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
 // Each length box has a unit picker beside it. The pick is remembered per machine.
@@ -1145,7 +1176,7 @@ function fillHome() {
   $('cAll').onchange = () => { const r = parseLen($('cAll').value, $('cAllU').value); if (!r || !(r.m > 0)) { toast("That doesn't look like a width. Try 10 ft or 120 in."); return; } let v = r.m, u = r.typed ? r.unit : $('cAllU').value;
     if (!r.typed) { const q = saneWidth(r.raw, u); if (q && confirm(q.ask)) { v = q.m; u = q.unit; } } for (let i = 0; i < 7; i++) pr.w[i] = v; if ([...$('cAllU').options].some(o => o.value === u)) pr.u.w = u; saveP(); afterProf(); };
   const wb = $('cWidths'); wb.innerHTML = '';
-  for (let i = 0; i < pr.n; i++) { const d = document.createElement('div'); d.className = 'fld'; d.innerHTML = `<label>Section ${i + 1}</label><div class="len"><input inputmode="text"><select class="lu"></select></div>`; wb.appendChild(d);
+  for (let i = 0; i < pr.n; i++) { const d = document.createElement('div'); d.className = 'fld'; d.innerHTML = `<label>Section ${i + 1}</label><div class="len"><input inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><select class="lu"></select></div>`; wb.appendChild(d);
     lenField(d.querySelector('input'), d.querySelector('select'), 'w', () => pr.w[i], (m) => { if (m > 0) pr.w[i] = m; }, { sane: saneWidth, after: () => { renderMachines(); $('cWW').textContent = fmtFtIn(WW()); $('boom').innerHTML = ''; renderBoom(); setScale(); } }); }
   $('cWW').textContent = fmtFtIn(WW());
   $('cInlDir').value = pr.inl < 0 ? '-1' : '1';
@@ -1165,7 +1196,7 @@ $('cSec').onchange = () => { prof().n = +$('cSec').value; saveP(); afterProf(); 
 $('mAdd').onclick = () => { const q = defProf(P.length); q.name = 'Machine ' + (P.length + 1); P.push(q); S.profile = P.length - 1; saveP(); saveS(); afterProf(); $('cName').focus(); $('cName').select(); };
 $('mDup').onclick = () => { const q = JSON.parse(JSON.stringify(prof())); q.name = prof().name + ' copy'; P.push(q); S.profile = P.length - 1; saveP(); saveS(); afterProf(); };
 $('mDel').onclick = () => { if (P.length < 2) return; if (!confirm(`Delete ${prof().name}?`)) return; P.splice(S.profile, 1); S.profile = Math.max(0, S.profile - 1); saveP(); saveS(); afterProf(); };
-$('jName').onchange = () => { job.name = $('jName').value.trim(); jobDirty = true; jobOptions(); updateUI(); };
+$('jName').onchange = () => { job.name = $('jName').value.trim(); S.jobNames[job.n] = job.name; saveS(); jobDirty = true; jobOptions(); updateUI(); };
 $('cEdge').onchange = () => { S.edge = $('cEdge').value; saveS(); };
 $('cSmooth').onchange = () => { S.smooth = $('cSmooth').value; saveS(); kf.t = 0; toast(S.smooth === 'off' ? 'Using raw GPS' : 'GPS smoothing updated'); };
 $('cAuto').onchange = () => { S.autoSec = $('cAuto').checked; saveS(); };
@@ -1183,17 +1214,18 @@ $('kSave').onclick = async () => {
   if (res) { m.innerHTML = res.bad > res.total * 0.5 ? `<b>Only part of it saved.</b> ${res.total - res.bad} of ${res.total} pieces. Try again with better signal.` : `<b>Saved.</b> The aerial photo for this area will show even with no signal.`; S.sat = true; saveS(); $('kSat').checked = true; }
 };
 $('kBeep').onchange = () => { S.beeps = $('kBeep').checked; saveS(); };
-$('kWake').onchange = () => { S.wake = $('kWake').checked; saveS(); if (S.wake) wake(); else if (wakeLock) wakeLock.release(); };
+$('kWake').onchange = () => { S.wake = $('kWake').checked; saveS(); if (S.wake) wake(); else unwake(); };
 $('kReset').onclick = async () => { if (!confirm('Erase all settings, machines and jobs on this phone?')) return; localStorage.removeItem('wfo.settings'); localStorage.removeItem('wfo.profiles'); await idb.clear('kv'); location.reload(); };
-function applyTheme() { document.documentElement.setAttribute('data-theme', S.theme); needRender = true; }
+function applyTheme() { document.documentElement.setAttribute('data-theme', S.theme); for (const k in cssCache) delete cssCache[k]; needRender = true; }
 
 // ============================================================================
 // Main loop & boot
 // ============================================================================
 let needRender = true;
+let lastDraw = 0;
 function frame() {
-  const moving = pose && (pose.spd > 0.2 || demoOn());
-  if (moving || needRender) { snapView(); render(); needRender = false; }
+  const moving = pose && (pose.spd > 0.2 || demoOn()); const t = performance.now();
+  if ((moving || needRender) && t - lastDraw > 30) { lastDraw = t; snapView(); render(); needRender = false; }
   const now = performance.now(); if (now - lastUI > 120) { lastUI = now; updateUI(); if (mapping) renderBoom(); if (sim.timer) updateSimPad(); }
   requestAnimationFrame(frame);
 }
