@@ -337,8 +337,17 @@ h4.sub { margin: 4px 0 0; font: 700 14px var(--font-head); letter-spacing: .06em
         <div class="fld"><label for="kUnits">Units</label><select id="kUnits"><option value="us">Feet, acres, mph</option><option value="metric">Meters, hectares, km/h</option></select></div>
       </div>
       <label class="sw"><span class="lb">3D view<small>Tilts the map toward the horizon while you drive</small></span><input type="checkbox" id="kTilt"></label>
-      <label class="sw"><span class="lb">Satellite imagery<small>Aerial photo under your coverage (needs cell signal)</small></span><input type="checkbox" id="kSat"></label>
+      <label class="sw"><span class="lb">Aerial photo<small>Shows the field under your coverage. Works anywhere in the US.</small></span><input type="checkbox" id="kSat"></label>
       <div class="fld"><label for="kOpacity">Photo brightness</label><input type="range" id="kOpacity" min="20" max="100" style="min-height:auto;padding:0"></div>
+    </div>
+    <div class="card">
+      <h3>Use the map without signal</h3>
+      <div class="note">Fields often have weak signal. Stand in the field (or anywhere near it) with good service and save the area. The aerial photo then shows even with no signal at all.</div>
+      <div class="g2">
+        <div class="fld"><label for="kArea">How far around you</label><select id="kArea"><option value="400">¼ mile</option><option value="800" selected>½ mile</option><option value="1600">1 mile</option><option value="3200">2 miles</option></select></div>
+        <div class="fld"><label>&nbsp;</label><button class="btn navy" id="kSave">Save this area</button></div>
+      </div>
+      <div class="note" id="kSaveMsg"></div>
     </div>
     <div class="card">
       <h3>Sounds and screen</h3>
@@ -371,7 +380,7 @@ const norm = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v
 
 // ---------- Settings & profiles ----------
 function load(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
-const DEF = { theme: 'dark', units: 'us', spacing: 0.3048, infoL: 'speed', infoR: 'area', profile: 0, sat: false, opacity: 70, tilt: false, beeps: true, autoSec: false, edge: 'center', maxAcc: 6, smooth: 'normal', wake: true, demo: false, job: 1, view: 'vehicle', zoomV: 0, zoomF: 0 };
+const DEF = { theme: 'dark', units: 'us', spacing: 0.3048, infoL: 'speed', infoR: 'area', profile: 0, sat: true, opacity: 70, tilt: false, beeps: true, autoSec: false, edge: 'center', maxAcc: 6, smooth: 'normal', wake: true, demo: false, job: 1, view: 'vehicle', zoomV: 0, zoomF: 0 };
 const S = Object.assign({}, DEF, load('wfo.settings', {}));
 const saveS = () => { try { localStorage.setItem('wfo.settings', JSON.stringify(S)); } catch (e) {} };
 const defProf = (i) => ({ name: 'Machine ' + (i + 1), n: 3, w: [3.048, 3.048, 3.048, 3.048, 3.048, 3.048, 3.048], lat: 0, inl: 2.5, u: {} });
@@ -745,6 +754,7 @@ function render() {
   if (job.ret) { pin([job.ret.E, job.ret.N], '#dc2626', 'R'); if (retGuide && pose) { const a = w2s(pose.E, pose.N), b = w2s(job.ret.E, job.ret.N); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); ctx.setLineDash([]); } }
   drawVehicle();
   if (S.view === 'field') drawNorth();
+  if (S.sat && mapStatus) { ctx.font = '600 12px Inter, sans-serif'; ctx.textAlign = 'left'; const tw = Math.min(W - 70, ctx.measureText(mapStatus).width + 16); ctx.fillStyle = '#000000aa'; ctx.fillRect(60, H - 34, tw, 24); ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(mapStatus, 68, H - 22, tw - 16); }
 }
 function drawGrid(vb) { // faint 1-working-width grid only in field view when zoomed in enough, for a sense of motion
   if (!job.origin) return; const step = Math.pow(10, Math.ceil(Math.log10(60 / view.scale))); const dark = S.theme === 'dark';
@@ -804,24 +814,78 @@ function drawVehicle() {
   const stale = gnssAt && performance.now() - gnssAt > 5000; if (stale) { ctx.fillStyle = '#e0484e'; ctx.font = '700 13px "Barlow Semi Condensed"'; ctx.textAlign = 'center'; ctx.fillText('NO GPS', ax, ay - 22); }
 }
 function drawNorth() { const x = W - 54, y = 30; ctx.fillStyle = cssv('--fg'); ctx.strokeStyle = cssv('--fg'); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y + 12); ctx.lineTo(x, y - 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x - 5, y - 6); ctx.lineTo(x + 5, y - 6); ctx.closePath(); ctx.fill(); ctx.font = '700 11px "Barlow Semi Condensed"'; ctx.textAlign = 'center'; ctx.fillText('N', x, y + 24); }
-// ---- Satellite imagery (Web Mercator tiles, warped by corner through the local projection) ----
-const TILE = { tdot: { url: (z, x, y) => `https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer/tile/${z}/${y}/${x}`, max: 19, bbox: [-90.32, 34.98, -81.64, 36.68] }, esri: { url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`, max: 19 } };
-const tileCache = new Map(); let inflight = 0;
+// ---- Aerial photo (Web Mercator tiles, warped by corner through the local projection) ----
+// Each tile tries several free imagery services in turn, picked by where THAT tile is (not where the job started):
+// Esri World Imagery everywhere, Tennessee's state imagery inside TN, then USGS imagery. A tile nobody has is filled
+// in from a lower-zoom tile, so there are no holes. Tiles you've seen (or saved for offline) come from the phone.
+const TN_BOX = [-90.32, 34.98, -81.64, 36.68];
+const SRC = {
+  esri: { max: 19, url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}?blankTile=false` },
+  tn: { max: 19, url: (z, x, y) => `https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer/tile/${z}/${y}/${x}` },
+  usgs: { max: 16, url: (z, x, y) => `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}` },
+};
+const MAXZ = 19;
 function tileLL(x, y, z) { const n = 2 ** z; return [Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) / D2R, x / n * 360 - 180]; }
 function llTile(lat, lon, z) { const n = 2 ** z; return [(lon + 180) / 360 * n, (1 - Math.log(Math.tan(lat * D2R) + 1 / Math.cos(lat * D2R)) / Math.PI) / 2 * n]; }
-function getTile(src, z, x, y) { const k = `${src}/${z}/${x}/${y}`; let t = tileCache.get(k); if (t) return t; if (inflight > 24) return null; t = { img: new Image(), ok: false }; tileCache.set(k, t); inflight++;
-  t.img.crossOrigin = 'anonymous'; t.img.onload = () => { t.ok = true; inflight--; needRender = true; }; t.img.onerror = () => { inflight--; }; t.img.src = TILE[src].url(z, x, y); if (tileCache.size > 500) tileCache.delete(tileCache.keys().next().value); return t; }
+function srcChain(z, x, y) { const [la, lo] = tileLL(x + 0.5, y + 0.5, z); const inTN = lo >= TN_BOX[0] && lo <= TN_BOX[2] && la >= TN_BOX[1] && la <= TN_BOX[3];
+  return (inTN ? ['esri', 'tn', 'usgs'] : ['esri', 'usgs']).filter(k => z <= SRC[k].max); }
+const tileCache = new Map(); let inflight = 0, tilesOk = 0, tilesBad = 0;
+function getTile(z, x, y) {
+  const k = `${z}/${x}/${y}`; let t = tileCache.get(k);
+  if (t) { if (t.dead && Date.now() - t.dead > 20000) { tileCache.delete(k); t = null; } else return t; } // retry after a while (signal may be back)
+  if (inflight > 16) return null;
+  t = { img: null, ok: false, dead: 0, chain: srcChain(z, x, y), i: 0, cors: true }; tileCache.set(k, t); loadTile(t, z, x, y);
+  if (tileCache.size > 700) { for (const [kk, v] of tileCache) { if (v !== t) { tileCache.delete(kk); break; } } }
+  return t;
+}
+function loadTile(t, z, x, y) {
+  if (t.i >= t.chain.length) { t.dead = Date.now(); tilesBad++; return; }
+  const img = new Image(); inflight++; if (t.cors) img.crossOrigin = 'anonymous';
+  img.onload = () => { inflight--; if (img.naturalWidth < 64) { t.i++; loadTile(t, z, x, y); return; } t.img = img; t.ok = true; t.src = t.chain[t.i]; tilesOk++; needRender = true; };
+  img.onerror = () => { inflight--; if (t.cors) { t.cors = false; loadTile(t, z, x, y); return; } t.cors = true; t.i++; loadTile(t, z, x, y); };
+  img.src = SRC[t.chain[t.i]].url(z, x, y);
+}
+let imgTainted = false, mapStatus = '';
 function drawImagery() {
-  const o = job.origin, b = TILE.tdot.bbox; const src = (o.lon >= b[0] && o.lon <= b[2] && o.lat >= b[1] && o.lat <= b[3]) ? 'tdot' : 'esri';
+  const o = job.origin;
   const ll = [s2w(0, 0), s2w(W, 0), s2w(0, H), s2w(W, H)].map(([E, N]) => fromENU(E, N, o)); const box = [Math.min(...ll.map(p => p[0])), Math.min(...ll.map(p => p[1])), Math.max(...ll.map(p => p[0])), Math.max(...ll.map(p => p[1]))];
-  const mpp = 1 / view.scale / Math.min(2, dpr); let z = clamp(Math.ceil(Math.log2(156543.03 * Math.cos(o.lat * D2R) / mpp)), 3, TILE[src].max);
+  const mpp = 1 / view.scale / Math.min(2, dpr); let z = clamp(Math.ceil(Math.log2(156543.03 * Math.cos(o.lat * D2R) / mpp)), 3, MAXZ);
   let [x0, y0] = llTile(box[2], box[1], z), [x1, y1] = llTile(box[0], box[3], z);
-  while ((Math.floor(x1) - Math.floor(x0) + 1) * (Math.floor(y1) - Math.floor(y0) + 1) > 60 && z > 3) { z--; [x0, y0] = llTile(box[2], box[1], z); [x1, y1] = llTile(box[0], box[3], z); }
-  ctx.save(); ctx.globalAlpha = S.opacity / 100;
-  for (let ty = Math.floor(y0); ty <= Math.floor(y1); ty++) for (let tx = Math.floor(x0); tx <= Math.floor(x1); tx++) { const t = getTile(src, z, tx, ty); if (!t || !t.ok) continue;
-    const g = (lat, lon) => w2s(...toENU(lat, lon, o)); const [la0, lo0] = tileLL(tx, ty, z), [la1, lo1] = tileLL(tx + 1, ty + 1, z); const TL = g(la0, lo0), TR = g(la0, lo1), BL = g(la1, lo0);
-    ctx.setTransform(dpr * (TR[0] - TL[0]) / 256, dpr * (TR[1] - TL[1]) / 256, dpr * (BL[0] - TL[0]) / 256, dpr * (BL[1] - TL[1]) / 256, dpr * TL[0], dpr * TL[1]); ctx.drawImage(t.img, 0, 0, 256.8, 256.8); }
+  const lim = S.view === 'vehicle' && S.tilt ? 90 : 60;
+  while ((Math.floor(x1) - Math.floor(x0) + 1) * (Math.floor(y1) - Math.floor(y0) + 1) > lim && z > 3) { z--; [x0, y0] = llTile(box[2], box[1], z); [x1, y1] = llTile(box[0], box[3], z); }
+  ctx.save(); ctx.globalAlpha = S.opacity / 100; let drawn = 0, want = 0;
+  const g = (lat, lon) => w2s(...toENU(lat, lon, o));
+  for (let ty = Math.floor(y0); ty <= Math.floor(y1); ty++) for (let tx = Math.floor(x0); tx <= Math.floor(x1); tx++) {
+    want++; let t = getTile(z, tx, ty), img = null, sx = 0, sy = 0, sw = 256;
+    if (t && t.ok) img = t.img;
+    else { // fill from the closest lower-zoom tile we already have
+      for (let up = 1; up <= 6 && z - up >= 3; up++) { const f = 2 ** up, pz = z - up, px = Math.floor(tx / f), py = Math.floor(ty / f); const pt = tileCache.get(`${pz}/${px}/${py}`) || (up <= 2 ? getTile(pz, px, py) : null);
+        if (pt && pt.ok) { img = pt.img; sw = 256 / f; sx = (tx - px * f) * sw; sy = (ty - py * f) * sw; break; } }
+    }
+    if (!img) continue; drawn++;
+    const [la0, lo0] = tileLL(tx, ty, z), [la1, lo1] = tileLL(tx + 1, ty + 1, z); const TL = g(la0, lo0), TR = g(la0, lo1), BL = g(la1, lo0);
+    ctx.setTransform(dpr * (TR[0] - TL[0]) / 256, dpr * (TR[1] - TL[1]) / 256, dpr * (BL[0] - TL[0]) / 256, dpr * (BL[1] - TL[1]) / 256, dpr * TL[0], dpr * TL[1]);
+    try { ctx.drawImage(img, sx, sy, sw, sw, 0, 0, 256.8, 256.8); } catch (e) {}
+    if (!img.crossOrigin) imgTainted = true;
+  }
   ctx.restore(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  mapStatus = drawn ? '' : (navigator.onLine === false ? 'No signal. Aerial photo will show when you have service, or save this area ahead of time in Settings.' : (tilesBad && !tilesOk ? 'Aerial photo not loading. Check your signal.' : 'Loading aerial photo…'));
+}
+// ---- Save an area for use without signal (fetches tiles; the service worker keeps them) ----
+async function saveArea(radiusM, onProg) {
+  const p = drPose(); const c = p && job.origin ? fromENU(p.E, p.N, job.origin) : gnss ? [gnss.lat, gnss.lon] : job.origin ? [job.origin.lat, job.origin.lon] : null;
+  if (!c) { toast('Need a GPS position first'); return; }
+  const dLat = radiusM / 111320, dLon = radiusM / (111320 * Math.cos(c[0] * D2R)); const list = [];
+  const zTop = radiusM <= 900 ? 19 : 18;
+  for (let z = 12; z <= zTop; z++) { const [xa, ya] = llTile(c[0] + dLat, c[1] - dLon, z), [xb, yb] = llTile(c[0] - dLat, c[1] + dLon, z);
+    for (let x = Math.floor(xa); x <= Math.floor(xb); x++) for (let y = Math.floor(ya); y <= Math.floor(yb); y++) list.push([z, x, y]); }
+  let done = 0, bad = 0, i = 0; const total = list.length;
+  async function one(z, x, y) { let net = false; for (const k of srcChain(z, x, y)) { const u = SRC[k].url(z, x, y);
+      try { const r = await fetch(u, { mode: 'cors' }); net = true; if (r.ok) return true; } catch (e) { try { await fetch(u, { mode: 'no-cors' }); return true; } catch (e2) {} } }
+    return net; } // reached the server but no photo at this zoom: not a failure, a lower zoom fills in
+  async function worker() { while (i < total) { const [z, x, y] = list[i++]; if (!(await one(z, x, y))) bad++; done++; if (done % 10 === 0 || done === total) onProg(done, total, bad); } }
+  await Promise.all([1, 2, 3, 4, 5, 6].map(worker));
+  return { total, bad };
 }
 
 // ============================================================================
@@ -1024,7 +1088,7 @@ $('jGeo').onclick = () => { if (!job.origin) { toast('Nothing recorded yet'); re
   if (job.track.length > 1) F.push({ type: 'Feature', properties: { name: 'Applied passes (implement center)' }, geometry: { type: 'MultiLineString', coordinates: splitTrack().map(s => s.map(ll)) } });
   download(`wynne-job${job.n}-${stamp()}.geojson`, JSON.stringify({ type: 'FeatureCollection', features: F }), 'application/geo+json'); };
 function splitTrack() { const out = []; let cur = []; job.track.forEach((p, i) => { if (i && p[2] - job.track[i - 1][2] > 15000) { if (cur.length > 1) out.push(cur); cur = []; } cur.push([p[0], p[1]]); }); if (cur.length > 1) out.push(cur); return out; }
-$('jPng').onclick = () => { const keep = { ...view, v: S.view, z: S.zoomF, f: follow }; S.view = 'field'; resize(); fitJob(); render(); const url = canvas.toDataURL('image/png'); download(`wynne-job${job.n}-${stamp()}.png`, url); S.view = keep.v; S.zoomF = keep.z; follow = keep.f; Object.assign(view, { cx: keep.cx, cy: keep.cy, scale: keep.scale, rot: keep.rot }); applyView(); };
+$('jPng').onclick = () => { const keep = { ...view, v: S.view, z: S.zoomF, f: follow }; S.view = 'field'; resize(); fitJob(); render(); let url; try { url = canvas.toDataURL('image/png'); } catch (e) { const sv = S.sat; S.sat = false; render(); url = canvas.toDataURL('image/png'); S.sat = sv; } download(`wynne-job${job.n}-${stamp()}.png`, url); S.view = keep.v; S.zoomF = keep.z; follow = keep.f; Object.assign(view, { cx: keep.cx, cy: keep.cy, scale: keep.scale, rot: keep.rot }); applyView(); };
 $('jDel').onclick = async () => { if (!confirm(`Start ${job.name || 'job ' + job.n} over? This clears its coverage, lines, boundary and time.`)) return; await idb.del('kv', 'job:' + job.n); await idb.del('kv', 'cov:' + job.n); jobDirty = false; covDirty = false; await loadJob(job.n); refreshJobPanel(); toast('Cleared. Ready to start fresh.'); };
 $('jNum').onchange = async () => { await saveAll(); S.job = +$('jNum').value; saveS(); await loadJob(S.job); refreshJobPanel(); };
 
@@ -1105,6 +1169,13 @@ $('kUnits').onchange = () => { S.units = $('kUnits').value; P.forEach(q => { q.u
 $('kTilt').onchange = () => { S.tilt = $('kTilt').checked; saveS(); applyView(); };
 $('kSat').onchange = () => { S.sat = $('kSat').checked; saveS(); needRender = true; };
 $('kOpacity').oninput = () => { S.opacity = +$('kOpacity').value; saveS(); needRender = true; };
+$('kSave').onclick = async () => {
+  const b = $('kSave'), m = $('kSaveMsg'); if (b.disabled) return; b.disabled = true; const r = +$('kArea').value;
+  if (!navigator.serviceWorker || !navigator.serviceWorker.controller) m.textContent = 'Heads up: open the app from your home screen link for offline saving to stick.';
+  const res = await saveArea(r, (d, t, bad) => { b.textContent = `Saving ${Math.round(d / t * 100)}%`; });
+  b.disabled = false; b.textContent = 'Save this area';
+  if (res) { m.innerHTML = res.bad > res.total * 0.5 ? `<b>Only part of it saved.</b> ${res.total - res.bad} of ${res.total} pieces. Try again with better signal.` : `<b>Saved.</b> The aerial photo for this area will show even with no signal.`; S.sat = true; saveS(); $('kSat').checked = true; }
+};
 $('kBeep').onchange = () => { S.beeps = $('kBeep').checked; saveS(); };
 $('kWake').onchange = () => { S.wake = $('kWake').checked; saveS(); if (S.wake) wake(); else if (wakeLock) wakeLock.release(); };
 $('kReset').onclick = async () => { if (!confirm('Erase all settings, machines and jobs on this phone?')) return; localStorage.removeItem('wfo.settings'); localStorage.removeItem('wfo.profiles'); await idb.clear('kv'); location.reload(); };
@@ -1123,6 +1194,8 @@ function frame() {
 window.addEventListener('resize', resize); window.addEventListener('orientationchange', () => setTimeout(resize, 250));
 if (window.ResizeObserver) new ResizeObserver(resize).observe($('stage'));
 setInterval(() => { if (gpsOn && document.visibilityState === 'visible' && performance.now() - gnssAt > 30000 && Date.now() - lastRestart > 30000) startWatch(); needRender = true; }, 1000);
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
+window.addEventListener('online', () => { for (const [k, t] of tileCache) if (t.dead) tileCache.delete(k); needRender = true; });
 (async function boot() {
   applyTheme(); resize(); renderBoom(); cov = covNew();
   await loadJob(S.job); applyView();
