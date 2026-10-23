@@ -83,8 +83,9 @@ button.st { cursor: pointer; }
 /* ---- Stage ---- */
 #stage { position: relative; overflow: hidden; background: linear-gradient(var(--sky1), var(--sky2)); touch-action: none; }
 #cv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; touch-action: none; transform-origin: 50% 100%; }
-#haze { position: absolute; left: 0; right: 0; top: 0; height: 16%; pointer-events: none; z-index: 1; background: linear-gradient(var(--sky1), transparent); display: none; }
+#haze { position: absolute; left: 0; right: 0; top: 0; height: 12%; pointer-events: none; z-index: 1; background: linear-gradient(var(--sky1), transparent); display: none; }
 #stage.tilted #haze { display: block; }
+#mapMsg { position: absolute; left: 60px; right: 44px; top: 10px; z-index: 2; background: #000000b0; color: #fff; font: 600 12.5px/1.35 var(--font-ui); padding: 7px 10px; border-radius: 9px; pointer-events: none; }
 #optTab { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 34px; height: 84px; border: 1px solid var(--line); border-right: 0; border-radius: 12px 0 0 12px; background: var(--card); color: var(--fg); font: 700 24px/1 var(--font-head); box-shadow: 0 4px 16px #0006; z-index: 3; }
 #navmenu { position: absolute; right: 0; top: 0; bottom: 0; width: 92px; background: var(--card); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; padding: 6px; overflow-y: auto; z-index: 4; box-shadow: -6px 0 24px #0007; }
 .nb { background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 2px 5px; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 600 11px/1.1 var(--font-head); letter-spacing: .03em; text-transform: uppercase; color: var(--fg); min-height: 54px; justify-content: center; }
@@ -228,6 +229,7 @@ h4.sub { margin: 4px 0 0; font: 700 14px var(--font-head); letter-spacing: .06em
   <main id="stage">
     <canvas id="cv"></canvas>
     <div id="haze"></div>
+    <div id="mapMsg" class="hidden"></div>
     <div id="zoomBtns"><button id="zIn" aria-label="Zoom in">+</button><button id="zOut" aria-label="Zoom out">−</button><button id="zFollow" class="hidden" aria-label="Follow">◎</button></div>
     <div id="retArrow" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V4M5 11l7-7 7 7"/></svg><span id="retTxt"></span></div>
     <div id="simpad" class="hidden">
@@ -704,7 +706,7 @@ function resize() {
   $('stage').classList.toggle('tilted', tl);
   if (tl) {
     const th = TILT.deg * D2R, cs = Math.cos(th), sn = Math.sin(th), p = 1.6 * SH;
-    const yFar = (0.97 * SH) * p / (p * cs - 0.97 * SH * sn); // canvas height whose far edge lands at the top of the screen
+    const yFar = (1.04 * SH) * p / (p * cs - 1.04 * SH * sn); // canvas height whose far edge lands at the top of the screen
     const farScale = p / (p + yFar * sn); W = Math.ceil(SW / farScale * 1.08); H = Math.ceil(yFar);
     const yVeh = 0.2 * SH; vehUp = yVeh * p / (p * cs - yVeh * sn); // tractor sits 20% up the screen
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px'; canvas.style.left = ((SW - W) / 2) + 'px'; canvas.style.top = (SH - H) + 'px';
@@ -754,7 +756,7 @@ function render() {
   if (job.ret) { pin([job.ret.E, job.ret.N], '#dc2626', 'R'); if (retGuide && pose) { const a = w2s(pose.E, pose.N), b = w2s(job.ret.E, job.ret.N); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); ctx.setLineDash([]); } }
   drawVehicle();
   if (S.view === 'field') drawNorth();
-  if (S.sat && mapStatus) { ctx.font = '600 12px Inter, sans-serif'; ctx.textAlign = 'left'; const tw = Math.min(W - 70, ctx.measureText(mapStatus).width + 16); ctx.fillStyle = '#000000aa'; ctx.fillRect(60, H - 34, tw, 24); ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(mapStatus, 68, H - 22, tw - 16); }
+  { const mm = $('mapMsg'), show = S.sat && mapStatus; mm.classList.toggle('hidden', !show); if (show && mm.textContent !== mapStatus) mm.textContent = mapStatus; }
 }
 function drawGrid(vb) { // faint 1-working-width grid only in field view when zoomed in enough, for a sense of motion
   if (!job.origin) return; const step = Math.pow(10, Math.ceil(Math.log10(60 / view.scale))); const dark = S.theme === 'dark';
@@ -821,6 +823,7 @@ function drawNorth() { const x = W - 54, y = 30; ctx.fillStyle = cssv('--fg'); c
 const TN_BOX = [-90.32, 34.98, -81.64, 36.68];
 const SRC = {
   esri: { max: 19, url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}?blankTile=false` },
+  clarity: { max: 19, url: (z, x, y) => `https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}?blankTile=false` },
   tn: { max: 19, url: (z, x, y) => `https://tnmap.tn.gov/arcgis/rest/services/BASEMAPS/IMAGERY_WEB_MERCATOR/MapServer/tile/${z}/${y}/${x}` },
   usgs: { max: 16, url: (z, x, y) => `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}` },
 };
@@ -828,18 +831,18 @@ const MAXZ = 19;
 function tileLL(x, y, z) { const n = 2 ** z; return [Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) / D2R, x / n * 360 - 180]; }
 function llTile(lat, lon, z) { const n = 2 ** z; return [(lon + 180) / 360 * n, (1 - Math.log(Math.tan(lat * D2R) + 1 / Math.cos(lat * D2R)) / Math.PI) / 2 * n]; }
 function srcChain(z, x, y) { const [la, lo] = tileLL(x + 0.5, y + 0.5, z); const inTN = lo >= TN_BOX[0] && lo <= TN_BOX[2] && la >= TN_BOX[1] && la <= TN_BOX[3];
-  return (inTN ? ['esri', 'tn', 'usgs'] : ['esri', 'usgs']).filter(k => z <= SRC[k].max); }
+  return (inTN ? ['esri', 'clarity', 'tn', 'usgs'] : ['esri', 'clarity', 'usgs']).filter(k => z <= SRC[k].max); }
 const tileCache = new Map(); let inflight = 0, tilesOk = 0, tilesBad = 0;
 function getTile(z, x, y) {
   const k = `${z}/${x}/${y}`; let t = tileCache.get(k);
-  if (t) { if (t.dead && Date.now() - t.dead > 20000) { tileCache.delete(k); t = null; } else return t; } // retry after a while (signal may be back)
+  if (t) { if (t.dead && Date.now() - t.dead > (t.offline ? 20000 : 180000)) { tileCache.delete(k); t = null; } else return t; } // retry after a while (signal may be back)
   if (inflight > 16) return null;
   t = { img: null, ok: false, dead: 0, chain: srcChain(z, x, y), i: 0, cors: true }; tileCache.set(k, t); loadTile(t, z, x, y);
   if (tileCache.size > 700) { for (const [kk, v] of tileCache) { if (v !== t) { tileCache.delete(kk); break; } } }
   return t;
 }
 function loadTile(t, z, x, y) {
-  if (t.i >= t.chain.length) { t.dead = Date.now(); tilesBad++; return; }
+  if (t.i >= t.chain.length) { t.dead = Date.now(); t.offline = navigator.onLine === false; tilesBad++; needRender = true; return; }
   const img = new Image(); inflight++; if (t.cors) img.crossOrigin = 'anonymous';
   img.onload = () => { inflight--; if (img.naturalWidth < 64) { t.i++; loadTile(t, z, x, y); return; } t.img = img; t.ok = true; t.src = t.chain[t.i]; tilesOk++; needRender = true; };
   img.onerror = () => { inflight--; if (t.cors) { t.cors = false; loadTile(t, z, x, y); return; } t.cors = true; t.i++; loadTile(t, z, x, y); };
@@ -853,14 +856,17 @@ function drawImagery() {
   let [x0, y0] = llTile(box[2], box[1], z), [x1, y1] = llTile(box[0], box[3], z);
   const lim = S.view === 'vehicle' && S.tilt ? 90 : 60;
   while ((Math.floor(x1) - Math.floor(x0) + 1) * (Math.floor(y1) - Math.floor(y0) + 1) > lim && z > 3) { z--; [x0, y0] = llTile(box[2], box[1], z); [x1, y1] = llTile(box[0], box[3], z); }
-  ctx.save(); ctx.globalAlpha = S.opacity / 100; let drawn = 0, want = 0;
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.globalAlpha = S.opacity / 100; let drawn = 0, want = 0;
   const g = (lat, lon) => w2s(...toENU(lat, lon, o));
   for (let ty = Math.floor(y0); ty <= Math.floor(y1); ty++) for (let tx = Math.floor(x0); tx <= Math.floor(x1); tx++) {
     want++; let t = getTile(z, tx, ty), img = null, sx = 0, sy = 0, sw = 256;
     if (t && t.ok) img = t.img;
     else { // fill from the closest lower-zoom tile we already have
-      for (let up = 1; up <= 6 && z - up >= 3; up++) { const f = 2 ** up, pz = z - up, px = Math.floor(tx / f), py = Math.floor(ty / f); const pt = tileCache.get(`${pz}/${px}/${py}`) || (up <= 2 ? getTile(pz, px, py) : null);
-        if (pt && pt.ok) { img = pt.img; sw = 256 / f; sx = (tx - px * f) * sw; sy = (ty - py * f) * sw; break; } }
+      let below = t; // walk up one zoom at a time; only ask for a coarser tile once the finer one is known to be missing
+      for (let up = 1; up <= 7 && z - up >= 3; up++) { const f = 2 ** up, pz = z - up, px = Math.floor(tx / f), py = Math.floor(ty / f);
+        let pt = tileCache.get(`${pz}/${px}/${py}`); if (!pt && (up === 1 || (below && below.dead))) pt = getTile(pz, px, py);
+        if (pt && pt.ok) { img = pt.img; sw = 256 / f; sx = (tx - px * f) * sw; sy = (ty - py * f) * sw; break; }
+        if (!pt || !pt.dead) { if (!(below && below.dead)) break; } below = pt; }
     }
     if (!img) continue; drawn++;
     const [la0, lo0] = tileLL(tx, ty, z), [la1, lo1] = tileLL(tx + 1, ty + 1, z); const TL = g(la0, lo0), TR = g(la0, lo1), BL = g(la1, lo0);

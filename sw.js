@@ -1,8 +1,8 @@
 // Field Ops service worker: lets the app open with no signal, and keeps aerial photo tiles on the phone.
-const APP = 'fieldops-app-v4';
+const APP = 'fieldops-app-v5';
 const TILES = 'fieldops-tiles-v1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
-const TILE_HOSTS = ['server.arcgisonline.com', 'tnmap.tn.gov', 'basemap.nationalmap.gov', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+const TILE_HOSTS = ['server.arcgisonline.com', 'clarity.maptiles.arcgis.com', 'tnmap.tn.gov', 'basemap.nationalmap.gov', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 const MAX_TILES = 12000;
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
