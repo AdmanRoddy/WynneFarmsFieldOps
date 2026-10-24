@@ -449,7 +449,7 @@ const idb = (() => {
 // ============================================================================
 // Job: guidance lines, boundary, return point, track, coverage
 // ============================================================================
-const MODES = { straight: { ab: 'STRAIGHT', name: 'Straight lines', min: 3 }, curve: { ab: 'CURVE', name: 'Curved lines', min: 3 }, pivot: { ab: 'PIVOT', name: 'Pivot circles', min: 50 }, lastpass: { ab: 'FOLLOW', name: 'Follow last pass' }, nextrow: { ab: 'ROWS', name: 'Row to row' }, none: { ab: 'NO GUIDE', name: 'No guidance' } };
+const MODES = { straight: { ab: 'STRAIGHT', name: 'Straight lines', min: 3 }, curve: { ab: 'CURVE', name: 'Curved lines', min: 3 }, pivot: { ab: 'PIVOT', name: 'Pivot circles', min: 3 }, lastpass: { ab: 'FOLLOW', name: 'Follow last pass' }, nextrow: { ab: 'ROWS', name: 'Row to row' }, rounds: { ab: 'LAPS', name: 'Around the field' }, none: { ab: 'NO GUIDE', name: 'No guidance' } };
 const newJob = (n) => ({ n, name: '', origin: null, created: Date.now(), mode: 'straight', lines: {}, marking: null, nr: null, boundary: null, bRec: null, ret: null, track: [], time: 0, prof: null });
 let job = newJob(1);
 let cov = null; // { cell, tiles: Map, net, tot }
@@ -551,11 +551,11 @@ function drPose() { if (!pose) return null; const dt = Math.min(1.2, (performanc
 // ============================================================================
 // Guidance
 // ============================================================================
-function nearestPoly(pts, P) {
+function nearestPoly(pts, P, closed) {
   let best = null; const n = pts.length;
   for (let i = 0; i < n - 1; i++) {
     const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (L2 < 1e-6) continue;
-    let t = ((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / L2; if (i > 0 && t < 0) t = 0; if (i < n - 2 && t > 1) t = 1; // ends extend straight
+    let t = ((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / L2; if ((closed || i > 0) && t < 0) t = 0; if ((closed || i < n - 2) && t > 1) t = 1; // open lines extend straight off their ends; closed laps don't
     const qx = a[0] + t * dx, qy = a[1] + t * dy, dist = Math.hypot(P[0] - qx, P[1] - qy);
     if (!best || dist < best.dist) { const L = Math.sqrt(L2), u = [dx / L, dy / L]; best = { dist, d: (P[0] - qx) * u[1] - (P[1] - qy) * u[0], u, i }; }
   }
@@ -594,6 +594,10 @@ function guide(p) {
     case 'curve': if (L) { const q = nearestPoly(L.pts, P); if (q) r = { d: q.d - (L.nudge || 0), u: q.u }; } break;
     case 'pivot': if (L) { const v = [P[0] - L.C[0], P[1] - L.C[1]], rr = Math.hypot(v[0], v[1]) || 1, vh = [v[0] / rr, v[1] / rr]; r = { d: rr - L.R - (L.nudge || 0), u: [-vh[1], vh[0]] }; } break;
     case 'lastpass': return lastPassGuide(P);
+    case 'rounds': { if (!L) return null; const q0 = nearestPoly(L.pts.concat([L.pts[0]]), P, true); if (!q0) return null; const dIn = inPoly(L.pts, P[0], P[1]) ? q0.dist : -q0.dist;
+      let k = Math.max(0, Math.round((dIn - W / 2) / W)); let ring = insetRing(L.pts, W / 2 + k * W); while (!ring && k > 0) { k--; ring = insetRing(L.pts, W / 2 + k * W); }
+      if (!ring) return null; const q = nearestPoly(ring.concat([ring[0]]), P, true); if (!q) return null; // ring runs counter-clockwise: inside is on the left
+      return { xte: q.d, u: q.u, n: k + 1, d: dIn }; }
     case 'nextrow': { const nr = job.nr; if (!nr || nr.phase !== 'guide') return null; const u = norm([nr.B[0] - nr.A[0], nr.B[1] - nr.A[1]]); const d = (P[0] - nr.A[0]) * u[1] - (P[1] - nr.A[1]) * u[0]; return { xte: d - nr.side * W - (nr.nudge || 0), u, n: null, d }; }
   }
   if (!r) return null; const n = Math.round(r.d / W); return { d: r.d, xte: r.d - n * W, u: r.u, n };
@@ -648,19 +652,20 @@ function updateOverlap() {
 }
 
 // ---------- Marking A/B ----------
-function minB() { return (MODES[job.mode] || {}).min || 3; }
+function minB() { return job.mode === 'pivot' ? Math.max(3, WW() / 2) : (MODES[job.mode] || {}).min || 3; }
+function markDist(m) { if (!m) return 0; if (m.mode === 'pivot' && pose) { const G = gp(pose); return Math.hypot(G[0] - m.A[0], G[1] - m.A[1]); } return m.dist; }
 function markA() {
   if (!pose) { toast('Waiting for GPS'); return; }
   if (job.mode === 'nextrow') { markRowEnd(); return; }
-  if (!MODES[job.mode].min) { toast('This guidance type follows your coverage, no A and B needed'); return; }
-  const G = gp(pose); job.marking = { mode: job.mode, A: G, pts: [G], dist: 0, prev: job.lines[job.mode] || null }; jobDirty = true; toast('A is set. Keep driving your line, then tap Set B.'); updateUI();
+  if (!MODES[job.mode].min) { toast(job.mode === 'rounds' ? 'Laps come from your boundary, no A and B needed' : 'This guidance type follows your coverage, no A and B needed'); return; }
+  const G = gp(pose); job.marking = { mode: job.mode, A: G, pts: [G], dist: 0, prev: job.lines[job.mode] || null }; jobDirty = true; toast(job.mode === 'pivot' ? 'Center is set. Drive out to your first circle, then tap Set B.' : 'A is set. Keep driving your line, then tap Set B.'); updateUI();
 }
 function markB() {
-  const m = job.marking; if (!m) return; if (m.dist < minB()) { toast(`Keep going about ${fmtL(minB() - m.dist, 0)}, then tap Set B`); return; }
+  const m = job.marking; if (!m) return; if (markDist(m) < minB()) { toast(`Keep going about ${fmtL(minB() - markDist(m), 0)}, then tap Set B`); return; }
   const G = gp(pose), pts = m.pts.concat([G]);
   if (m.mode === 'straight') job.lines.straight = { A: m.A, B: G, nudge: 0 };
   else if (m.mode === 'curve') { const s = simplify(pts, 0.15); job.lines.curve = { pts: s.length >= 2 ? s : [m.A, G], nudge: 0 }; }
-  else if (m.mode === 'pivot') { const c = fitCircle(pts); if (!c || c.R < 15 || c.R > 3000 || c.rms > 3) { toast('Not enough of the circle yet. Drive farther around the pivot, then tap Set B.'); return; } job.lines.pivot = { C: c.C, R: c.R, nudge: 0, A: m.A, B: G }; }
+  else if (m.mode === 'pivot') { job.lines.pivot = { C: m.A, R: Math.hypot(G[0] - m.A[0], G[1] - m.A[1]), nudge: 0, A: m.A, B: G }; } // A = pivot center, B = a point on the first circle
   job.marking = null; jobDirty = true; toast('Your line is set. Follow the lights.'); beep(1); updateUI();
 }
 function cancelMark() { if (!job.marking) return; job.marking = null; jobDirty = true; toast('Cancelled. Your old line is still there.'); updateUI(); }
@@ -674,6 +679,7 @@ function simplify(pts, tol) {
 function nudge() {
   const g = guide(pose); if (!g) { toast('No line to shift yet'); return; }
   if (job.mode === 'lastpass') { toast('Follow last pass already tracks your coverage'); return; }
+  if (job.mode === 'rounds') { toast('Laps follow your boundary'); return; }
   if (job.mode === 'nextrow') { job.nr.nudge = (job.nr.nudge || 0) + g.xte; } else { const L = job.lines[job.mode]; L.nudge = (L.nudge || 0) + g.xte; }
   jobDirty = true; toast(`Line moved ${fmtXte(g.xte)} to where you are`);
 }
@@ -697,8 +703,66 @@ function stepBoundary(p) {
   r.pts.push(b); r.dist += dd; jobDirty = true; const s = r.pts[0];
   if (r.dist >= 5 * WW() && r.pts.length > 6 && Math.hypot(b[0] - s[0], b[1] - s[1]) <= WW()) finishBoundary(true);
 }
-function finishBoundary(auto) { const r = job.bRec; if (!r) return; if (r.dist < 5 * WW()) { toast(`Keep going about ${fmtL(5 * WW() - r.dist, 0)} first`); return; } job.boundary = { pts: simplify(r.pts, 0.2) }; job.bRec = null; jobDirty = true; beep(1); toast((auto ? 'Boundary closed itself. ' : 'Boundary saved. ') + fmtA(polyArea(job.boundary.pts)) + ' inside.'); closeMenus(); }
+function finishBoundary(auto) { const r = job.bRec; if (!r) return; if (r.dist < 5 * WW()) { toast(`Keep going about ${fmtL(5 * WW() - r.dist, 0)} first`); return; } job.boundary = { pts: simplify(r.pts, 0.2) }; job.bRec = null; jobDirty = true; beep(1); toast((auto ? 'Boundary closed itself. ' : 'Boundary saved. ') + fmtA(polyArea(job.boundary.pts)) + ' inside.'); closeMenus(); setTimeout(() => { $('optTab').classList.add('hidden'); sub('plan', true); }, 350); }
 function polyArea(pts) { let a = 0; for (let i = 0, n = pts.length; i < n; i++) { const p = pts[i], q = pts[(i + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a) / 2; }
+// ---------- Pass planning from a boundary ----------
+function ccw(pts) { let a = 0; for (let i = 0, n = pts.length; i < n; i++) { const p = pts[i], q = pts[(i + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; } return a > 0 ? pts.slice() : pts.slice().reverse(); }
+function polyCentroid(pts) { let a = 0, cx = 0, cy = 0; for (let i = 0, n = pts.length; i < n; i++) { const p = pts[i], q = pts[(i + 1) % n], f = p[0] * q[1] - q[0] * p[1]; a += f; cx += (p[0] + q[0]) * f; cy += (p[1] + q[1]) * f; } a /= 2; return Math.abs(a) < 1e-6 ? pts[0] : [cx / (6 * a), cy / (6 * a)]; }
+function edgeDist(pts, P) { let best = Infinity; for (let i = 0, n = pts.length; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1e-9; const t = clamp(((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / L2, 0, 1); best = Math.min(best, Math.hypot(P[0] - a[0] - t * dx, P[1] - a[1] - t * dy)); } return best; }
+// Shrink a field outline inward (counter-clockwise outline in, same out). Sharp corners are trimmed so laps stay smooth.
+function insetPoly(pts, off) {
+  const n = pts.length, out = [];
+  for (let i = 0; i < n; i++) { const a = pts[(i - 1 + n) % n], b = pts[i], c = pts[(i + 1) % n];
+    const u1 = norm([b[0] - a[0], b[1] - a[1]]), u2 = norm([c[0] - b[0], c[1] - b[1]]); const n1 = [-u1[1], u1[0]], n2 = [-u2[1], u2[0]];
+    let m = norm([n1[0] + n2[0], n1[1] + n2[1]]); const cosh = m[0] * n1[0] + m[1] * n1[1]; const k = off / Math.max(0.35, cosh); out.push([b[0] + m[0] * k, b[1] + m[1] * k]); }
+  return out;
+}
+// One lap inside the outline: every edge slides inward by the same amount, corners are re-joined, and short edges
+// that would flip inside out are dropped (that's what keeps notches and wiggles from turning laps into spikes).
+const ringCache = new Map();
+function insetRing(pts, off) {
+  const key = pts.length + ':' + pts[0][0].toFixed(2) + ':' + pts[0][1].toFixed(2) + ':' + off.toFixed(2); if (ringCache.has(key)) return ringCache.get(key);
+  let lines = []; for (let i = 0, n = pts.length; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n], u = norm([b[0] - a[0], b[1] - a[1]]); if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-6) continue; lines.push({ p: [a[0] - u[1] * off, a[1] + u[0] * off], u }); }
+  const meet = (L1, L2) => { const den = L1.u[0] * L2.u[1] - L1.u[1] * L2.u[0]; if (Math.abs(den) < 1e-9) return [(L1.p[0] + L2.p[0]) / 2, (L1.p[1] + L2.p[1]) / 2]; const t = ((L2.p[0] - L1.p[0]) * L2.u[1] - (L2.p[1] - L1.p[1]) * L2.u[0]) / den; return [L1.p[0] + L1.u[0] * t, L1.p[1] + L1.u[1] * t]; };
+  let r = null;
+  for (let guard = 0; guard < 200 && lines.length >= 3; guard++) {
+    const n = lines.length, v = []; for (let i = 0; i < n; i++) v.push(meet(lines[(i - 1 + n) % n], lines[i]));
+    let bad = -1, worst = 0; for (let i = 0; i < n; i++) { const a = v[i], b = v[(i + 1) % n], d = (b[0] - a[0]) * lines[i].u[0] + (b[1] - a[1]) * lines[i].u[1]; if (d < worst) { worst = d; bad = i; } }
+    if (bad < 0) { r = v; break; } lines.splice(bad, 1);
+  }
+  if (r) { let sa = 0; for (let i = 0, n = r.length; i < n; i++) { const a = r[i], b = r[(i + 1) % n]; sa += a[0] * b[1] - b[0] * a[1]; }
+    if (!(sa > 0 && sa / 2 > WW() * WW() && r.every(q => inPoly(pts, q[0], q[1]) && edgeDist(pts, q) > off * 0.7))) r = null; }
+  if (ringCache.size > 60) ringCache.clear(); ringCache.set(key, r); return r;
+}
+function planPasses(kind) {
+  if (!job.boundary) { toast('Drive a boundary first'); return; }
+  const W = WW(), pts = ccw(simplify(job.boundary.pts.concat([job.boundary.pts[0]]), Math.max(0.5, W / 4)).slice(0, -1));
+  if (pts.length < 3) { toast('That boundary is too small to plan'); return; }
+  const inside = (P) => inPoly(pts, P[0], P[1]);
+  if (kind === 'rows' || kind === 'facing') {
+    let u, base;
+    if (kind === 'rows') { // along the longest side of the field
+      let bi = 0, bl = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l > bl) { bl = l; bi = i; } }
+      const a = pts[bi], b = pts[(bi + 1) % pts.length]; u = norm([b[0] - a[0], b[1] - a[1]]); base = a;
+      const nIn = [-u[1], u[0]]; // left of travel is inside on a counter-clockwise outline
+      const A = [a[0] + nIn[0] * W / 2, a[1] + nIn[1] * W / 2], B = [b[0] + nIn[0] * W / 2, b[1] + nIn[1] * W / 2];
+      job.lines.straight = { A, B, nudge: 0 };
+    } else { // the way the tractor is pointed, first pass along the edge on the left side
+      const h = pose ? pose.h : 0; u = fwd(h); const nr = [u[1], -u[0]];
+      let mn = Infinity, bp = null; for (const q of pts) { const sd = q[0] * nr[0] + q[1] * nr[1]; if (sd < mn) { mn = sd; bp = q; } }
+      const A = [bp[0] + nr[0] * W / 2, bp[1] + nr[1] * W / 2]; job.lines.straight = { A, B: [A[0] + u[0] * 20, A[1] + u[1] * 20], nudge: 0 };
+    }
+    job.mode = 'straight'; toast('Passes planned. Start on the edge pass and follow the lights.');
+  } else if (kind === 'rounds') {
+    job.lines.rounds = { pts }; job.mode = 'rounds'; toast('Laps planned. Start on the outside lap and work in.');
+  } else if (kind === 'circle') {
+    const C = polyCentroid(pts); if (!inside(C)) { toast("The middle of that field isn't inside it, try laps instead"); return; }
+    const ds = []; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]); for (let t = 0; t < l; t += 1) ds.push(Math.hypot(a[0] + (b[0] - a[0]) * t / l - C[0], a[1] + (b[1] - a[1]) * t / l - C[1])); } ds.sort((x, y) => x - y); const Rf = ds[Math.floor(ds.length / 2)];
+    const R0 = Math.max(W / 2, Rf - W / 2); // outside circle sits half a width in from the edge
+    job.lines.pivot = { C, R: R0, nudge: 0, A: C, B: [C[0] + R0, C[1]] }; job.mode = 'pivot'; toast('Circles planned. Start on the outside circle and work in.');
+  }
+  job.marking = null; job.nr = null; jobDirty = true; closeMenus(); buildNav(); updateUI(); needRender = true;
+}
 function insideBoundary(p) { return job.boundary ? inPoly(job.boundary.pts, ...implPts(p).c) : null; }
 
 // ============================================================================
@@ -773,7 +837,8 @@ function render() {
   if (job.boundary) { poly(job.boundary.pts, true); ctx.strokeStyle = dark ? '#c8d2dc' : '#3a434d'; ctx.lineWidth = 3; ctx.stroke(); }
   if (job.bRec && job.bRec.pts.length > 1) { poly(job.bRec.pts, false); ctx.strokeStyle = '#ffffff'; ctx.setLineDash([8, 6]); ctx.lineWidth = 3; ctx.stroke(); ctx.setLineDash([]); }
   drawGuidelines(vb);
-  if (job.marking && job.marking.pts.length > 1) { poly(job.marking.pts, false); ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.stroke(); ctx.setLineDash([]); }
+  if (job.marking && job.marking.mode === 'pivot' && pose) { const md = markDist(job.marking); if (md > 0.5) { const [cx, cy] = w2s(job.marking.A[0], job.marking.A[1]); ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.arc(cx, cy, md * view.scale, 0, TAU); ctx.stroke(); ctx.setLineDash([]); } }
+  else if (job.marking && job.marking.pts.length > 1) { poly(job.marking.pts, false); ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.stroke(); ctx.setLineDash([]); }
   // points
   const L = job.lines[job.mode];
   const pin = (q, col, txt) => { if (!q) return; const [x, y] = w2s(q[0], q[1]); ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, 10, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = '700 12px "Barlow Semi Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x, y + 0.5); };
@@ -806,6 +871,16 @@ function drawGuidelines(vb) {
   const nAct = g && g.n != null ? g.n : 0;
   if (job.mode === 'straight' && L) {
     const u = norm([L.B[0] - L.A[0], L.B[1] - L.A[1]]), nr = [u[1], -u[0]]; const P = drPose(); const t0 = (P.E - L.A[0]) * u[0] + (P.N - L.A[1]) * u[1];
+    const bp = job.boundary && job.boundary.pts;
+    if (bp) { // planned field: show every pass inside the boundary, clipped to it
+      let lo = Infinity, hi = -Infinity; for (const q of bp) { const sd = (q[0] - L.A[0]) * nr[0] + (q[1] - L.A[1]) * nr[1] - (L.nudge || 0); lo = Math.min(lo, sd); hi = Math.max(hi, sd); }
+      const k0 = Math.ceil(lo / W2 - 0.5), k1 = Math.floor(hi / W2 + 0.5);
+      for (let kk = k0; kk <= k1 && kk - k0 < 400; kk++) { const off = kk * W2 + (L.nudge || 0); const o = [L.A[0] + nr[0] * off, L.A[1] + nr[1] * off]; const ts = [];
+        for (let i = 0, n = bp.length; i < n; i++) { const a = bp[i], b = bp[(i + 1) % n]; const ex = b[0] - a[0], ey = b[1] - a[1]; const den = u[0] * ey - u[1] * ex; if (Math.abs(den) < 1e-9) continue; const t = ((a[0] - o[0]) * ey - (a[1] - o[1]) * ex) / den, s2 = ((a[0] - o[0]) * u[1] - (a[1] - o[1]) * u[0]) / den; if (s2 >= 0 && s2 < 1) ts.push(t); }
+        ts.sort((x, y) => x - y); const k = kk - nAct; if (Math.abs(k) > 3) { ctx.strokeStyle = '#8a5a32'; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.35; } else style(k);
+        if (k === 0 && ts.length < 2) { ctx.beginPath(); ctx.moveTo(...w2s(o[0] + u[0] * (t0 - diag), o[1] + u[1] * (t0 - diag))); ctx.lineTo(...w2s(o[0] + u[0] * (t0 + diag), o[1] + u[1] * (t0 + diag))); ctx.stroke(); continue; }
+        ctx.beginPath(); for (let i = 0; i + 1 < ts.length; i += 2) { ctx.moveTo(...w2s(o[0] + u[0] * ts[i], o[1] + u[1] * ts[i])); ctx.lineTo(...w2s(o[0] + u[0] * ts[i + 1], o[1] + u[1] * ts[i + 1])); } ctx.stroke(); }
+    } else
     for (let k = -3; k <= 3; k++) { const off = (nAct + k) * W2 + (L.nudge || 0); const ax = L.A[0] + nr[0] * off + u[0] * (t0 - diag), ay = L.A[1] + nr[1] * off + u[1] * (t0 - diag), bx = L.A[0] + nr[0] * off + u[0] * (t0 + diag), by = L.A[1] + nr[1] * off + u[1] * (t0 + diag);
       style(k); ctx.beginPath(); ctx.moveTo(...w2s(ax, ay)); ctx.lineTo(...w2s(bx, by)); ctx.stroke(); }
   } else if (job.mode === 'curve' && L) {
@@ -817,6 +892,10 @@ function drawGuidelines(vb) {
     const tr = job.track; const pts = []; let j0 = g.lp.j, j1 = g.lp.j + 1;
     while (j0 > 0 && tr[j0][2] - tr[j0 - 1][2] < 15000 && g.lp.j - j0 < 60) j0--; while (j1 < tr.length - 1 && tr[j1 + 1][2] - tr[j1][2] < 15000 && j1 - g.lp.j < 60) j1++;
     for (let j = j0; j <= j1; j++) pts.push([tr[j][0], tr[j][1]]); if (pts.length >= 2) { const o = offsetPoly(pts, g.lp.s * W2).slice(1, -1); style(0); ctx.beginPath(); o.forEach((q, i) => { const [x, y] = w2s(q[0], q[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); }
+  } else if (job.mode === 'rounds' && L) {
+    const k0 = g && g.n ? g.n - 1 : 0; let ring = L.pts, rings = [];
+    for (let k = 0; k <= k0 + 2 && ring; k++) { const r = k === 0 ? insetRing(L.pts, W2 / 2) : insetRing(L.pts, W2 / 2 + k * W2); if (!r) break; rings.push([k, r]); }
+    for (const [k, r] of rings) { if (Math.abs(k - k0) > 2) continue; style(k - k0); ctx.beginPath(); r.forEach((q, i) => { const [x, y] = w2s(q[0], q[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath(); ctx.stroke(); }
   } else if (job.mode === 'nextrow' && job.nr && job.nr.phase === 'guide') {
     const nr0 = job.nr, u = norm([nr0.B[0] - nr0.A[0], nr0.B[1] - nr0.A[1]]), n = [u[1], -u[0]], off = nr0.side * W2 + (nr0.nudge || 0); style(0);
     ctx.beginPath(); ctx.moveTo(...w2s(nr0.A[0] + n[0] * off - u[0] * diag, nr0.A[1] + n[1] * off - u[1] * diag)); ctx.lineTo(...w2s(nr0.B[0] + n[0] * off + u[0] * diag, nr0.B[1] + n[1] * off + u[1] * diag)); ctx.stroke();
@@ -928,7 +1007,7 @@ const INFO = { speed: 'Speed', area: 'Total worked', net: 'Ground covered', time
 const INFO_ORDER = ['speed', 'area', 'net', 'time', 'swath', 'acc', 'none'];
 function infoVal(k, g) {
   switch (k) { case 'speed': return pose ? fmtSpd(pose.spd) : ''; case 'area': return cov && cov.cell ? fmtA(cov.tot * cov.cell ** 2) : fmtA(0); case 'net': return cov && cov.cell ? fmtA(cov.net * cov.cell ** 2) : fmtA(0);
-    case 'time': return fmtDur(job.time); case 'swath': return g && g.n != null ? String(g.n) : ''; case 'acc': return gnss ? fmtL(gnss.acc, US() ? 0 : 1) : ''; default: return ''; }
+    case 'time': return fmtDur(job.time); case 'swath': return g && g.n != null ? (job.mode === 'rounds' ? 'Lap ' + g.n : String(g.n)) : ''; case 'acc': return gnss ? fmtL(gnss.acc, US() ? 0 : 1) : ''; default: return ''; }
 }
 function setInfo(el, k, g) { setT(el.querySelector('.l'), INFO[k]); setT(el.querySelector('.v'), k === 'none' ? '' : infoVal(k, g)); }
 function activity(g) {
@@ -937,11 +1016,12 @@ function activity(g) {
   if (transport) return 'Road mode';
   if (mapping && gnss.acc > Math.max(S.maxAcc, 0.5)) return 'GPS too rough to paint';
   if (retGuide && job.ret) return 'Heading to pin';
-  if (job.marking) return job.marking.dist < minB() ? `Keep going ${fmtL(minB() - job.marking.dist, 0)}` : 'Tap Set B';
+  if (job.marking) { const md = markDist(job.marking); if (job.marking.mode === 'pivot') return md < minB() ? 'Drive out to your first circle' : 'At your first circle, tap Set B'; return md < minB() ? `Keep going ${fmtL(minB() - md, 0)}` : 'Tap Set B'; }
   if (job.mode === 'none') return 'Guidance off';
   if (job.mode === 'nextrow') { const nr = job.nr; if (!nr) return 'Tap End row at the end'; if (nr.phase === 'turn') return 'Turn into next row'; if (nr.phase === 'inrow') return 'Tap End row at the end'; return null; }
   if (job.mode === 'lastpass') return g ? null : 'No pass nearby yet';
-  if (!job.lines[job.mode]) return 'Drive, then tap Set A';
+  if (job.mode === 'rounds') return job.lines.rounds ? (g ? null : 'Drive into the field') : 'Make a boundary first';
+  if (!job.lines[job.mode]) return job.mode === 'pivot' ? 'At the pivot center, tap Set A' : 'Drive, then tap Set A';
   return null;
 }
 let lastUI = 0, relS = null;
@@ -966,11 +1046,11 @@ function updateUI() {
   const inb = p ? insideBoundary(p) : null; $('sBound').classList.toggle('hidden', inb == null); setT($('sBound'), inb ? 'IN' : 'OUT');
   const sm = $('sMap'); setT(sm, mapping ? 'PAINT ON' : 'PAINT OFF'); setC(sm, 'st ' + (mapping ? 'on' : 'off')); setT($('sJob'), (job.name || 'Job ' + job.n).toUpperCase()); setT($('sProf'), `${prof().name} · ${fmtFtIn(WW())}`);
   // actions
-  const bm = $('bMark'); bm.disabled = transport || job.mode === 'none' || job.mode === 'lastpass';
+  const bm = $('bMark'); bm.disabled = transport || job.mode === 'none' || job.mode === 'lastpass' || job.mode === 'rounds';
   if (job.mode === 'nextrow') { setC(bm, 'ab b'); setH(bm, 'End row'); }
-  else if (job.marking) { const ok = job.marking.dist >= minB(); setC(bm, 'ab b'); setH(bm, ok ? 'Set B' : `Set B<small>${fmtL(job.marking.dist, 0)} of ${fmtL(minB(), 0)}</small>`); }
-  else { setC(bm, 'ab a'); setH(bm, job.lines[job.mode] ? 'Set A<small>new line</small>' : 'Set A'); }
-  $('bNudge').disabled = !g || transport || job.mode === 'lastpass';
+  else if (job.marking) { const md = markDist(job.marking), ok = md >= minB(); setC(bm, 'ab b'); setH(bm, ok ? (job.marking.mode === 'pivot' ? `Set B<small>circle ${fmtL(md, 0)}</small>` : 'Set B') : `Set B<small>${fmtL(md, 0)} of ${fmtL(minB(), 0)}</small>`); }
+  else { setC(bm, 'ab a'); setH(bm, job.mode === 'pivot' ? (job.lines.pivot ? 'Set A<small>new center</small>' : 'Set A<small>at center</small>') : job.lines[job.mode] ? 'Set A<small>new line</small>' : 'Set A'); }
+  $('bNudge').disabled = !g || transport || job.mode === 'lastpass' || job.mode === 'rounds';
   const bp = $('bMap'); setC(bp, 'ab ' + (mapping ? 'mapon' : 'mapoff')); setH(bp, `Paint<small>${mapping ? 'on' : 'off'}</small>`); bp.disabled = transport;
   const bt = $('bTrans'); setC(bt, 'ab' + (transport ? ' trans' : '')); setH(bt, transport ? 'Road<small>tap for field</small>' : 'Field<small>mode</small>');
   // return-to-point arrow
@@ -1014,12 +1094,19 @@ function sub(kind, solo) {
   if (kind === 'mach') { h('Which machine?');
     P.forEach((q, i) => add(i === S.profile ? '●' : '○', q.name, `${fmtFtIn(q.w.slice(0, q.n).reduce((a, b) => a + b, 0))} wide · ${q.n} section${q.n > 1 ? 's' : ''}`, () => { S.profile = i; saveS(); afterProf(); closeMenus(); toast('Using ' + q.name); }, i === S.profile));
     add('✎', 'Add or edit machines', '', () => openHome('config')); }
+  if (kind === 'plan') { h('How do you want to work this field?');
+    add('⇅', 'Back and forth', 'Straight passes along the longest side, starting on that edge', () => planPasses('rows'));
+    add('↑', 'Back and forth, my direction', 'Straight passes the way the tractor is pointed', () => planPasses('facing'), false, !pose);
+    add('⟲', 'Around the field', 'Laps that follow the boundary, outside edge first, working in', () => planPasses('rounds'));
+    add('◎', 'Circles', 'Rings around the middle, for a round field', () => planPasses('circle'));
+    add('✕', 'Not now', 'You can plan it later from Boundary', closeMenus); }
   if (kind === 'mode') { h('How do you want to be guided?');
-    const sm = { straight: ['═', 'Drive one straight pass, every pass after it lines up'], curve: ['∿', 'Follows the shape of a gently curved first pass'], pivot: ['◎', 'Circles around a center pivot. Drive at least 165 ft of the circle.'], lastpass: ['⇉', 'No setup. Lines you up beside whatever you just covered.'], nextrow: ['↷', 'Tap End row, turn, and it guides you into the next row'], none: ['∅', 'Turns the lights off. Your line is kept.'] };
-    for (const k of Object.keys(sm)) add(sm[k][0], MODES[k].name, sm[k][1], () => { job.mode = k; job.marking = null; if (k !== 'nextrow') job.nr = null; jobDirty = true; closeMenus(); buildNav(); updateUI(); }, job.mode === k); }
+    const sm = { straight: ['═', 'Drive one straight pass, every pass after it lines up'], curve: ['∿', 'Follows the shape of a gently curved first pass'], pivot: ['◎', 'Set A at the pivot center, then Set B where your first circle goes. Rings are spaced one width in and out from B.'], lastpass: ['⇉', 'No setup. Lines you up beside whatever you just covered.'], nextrow: ['↷', 'Tap End row, turn, and it guides you into the next row'], rounds: ['⟲', 'Laps that follow your field boundary, edge first, working in'], none: ['∅', 'Turns the lights off. Your line is kept.'] };
+    for (const k of Object.keys(sm)) add(sm[k][0], MODES[k].name, k === 'rounds' && !job.boundary ? 'Needs a field boundary first' : sm[k][1], () => { if (k === 'rounds') { planPasses('rounds'); return; } job.mode = k; job.marking = null; if (k !== 'nextrow') job.nr = null; jobDirty = true; closeMenus(); buildNav(); updateUI(); }, job.mode === k); }
   if (kind === 'bnd') { h('Field boundary');
     if (job.bRec) { add('■', 'Finish boundary', `Joins straight back to where you started`, () => finishBoundary(false), false, job.bRec.dist < 5 * WW()); add('✕', 'Cancel', 'Keeps your old boundary', () => { job.bRec = null; jobDirty = true; closeMenus(); }); }
     else add('▶', 'Start boundary', 'Drive the field edge. It closes itself when you get back to the start.', startBoundary, false, !pose);
+    if (job.boundary && !job.bRec) add('▦', 'Plan my passes', 'Back and forth, around the field, or circles', () => sub('plan'));
     add('🗑', 'Delete boundary', job.boundary ? fmtA(polyArea(job.boundary.pts)) + ' inside' : 'None yet', () => { if (confirm('Delete this boundary?')) { job.boundary = null; jobDirty = true; closeMenus(); } }, false, !job.boundary || job.bRec); }
   if (kind === 'ret') { h('Pin a spot');
     add('＋', job.ret ? 'Move pin here' : 'Drop a pin here', 'Handy when you leave to refill', () => { if (!pose) return; job.ret = { E: pose.E, N: pose.N }; jobDirty = true; toast('Pin dropped'); closeMenus(); }, false, !pose);
@@ -1108,9 +1195,12 @@ setInterval(() => { if (jobDirty) saveAll(); }, 6000);
 setInterval(() => { if (covDirty) saveAll(); }, 10000);
 function jobBounds() { let b = [Infinity, Infinity, -Infinity, -Infinity]; const ext = (x, y) => { b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y); };
   if (cov.cell) for (const t of cov.tiles.values()) { const s = T * cov.cell; ext(t.tx * s, t.ty * s); ext((t.tx + 1) * s, (t.ty + 1) * s); }
-  if (job.boundary) job.boundary.pts.forEach(p => ext(p[0], p[1])); job.track.forEach(p => ext(p[0], p[1])); if (pose) ext(pose.E, pose.N); return isFinite(b[0]) ? b : null; }
+  if (job.boundary) job.boundary.pts.forEach(p => ext(p[0], p[1])); job.track.forEach(p => ext(p[0], p[1])); if (pose) ext(pose.E, pose.N);
+  const L = job.lines[job.mode]; if (L) { if (L.C && L.R) { const r = L.R + WW(); ext(L.C[0] - r, L.C[1] - r); ext(L.C[0] + r, L.C[1] + r); } if (L.A) ext(L.A[0], L.A[1]); if (L.B) ext(L.B[0], L.B[1]); if (L.pts) L.pts.forEach(p => ext(p[0], p[1])); }
+  if (b[2] - b[0] < 4 * WW() && isFinite(b[0])) { const c = (b[0] + b[2]) / 2; b[0] = c - 2 * WW(); b[2] = c + 2 * WW(); } if (b[3] - b[1] < 4 * WW() && isFinite(b[1])) { const c = (b[1] + b[3]) / 2; b[1] = c - 2 * WW(); b[3] = c + 2 * WW(); }
+  return isFinite(b[0]) ? b : null; }
 function fitJob() { const b = jobBounds(); if (!b) return; view.rot = 0; view.cx = (b[0] + b[2]) / 2; view.cy = (b[1] + b[3]) / 2; follow = false; const sc = 0.9 * Math.min(W / Math.max(5, b[2] - b[0]), H / Math.max(5, b[3] - b[1])); S.zoomF = Math.log(sc / baseScale()) / Math.log(1.6); setScale(); }
-function lineDesc() { const L = job.lines[job.mode]; const nm = MODES[job.mode].name; if (job.mode === 'nextrow') return nm; if (job.mode === 'lastpass' || job.mode === 'none') return nm; if (!L) return nm + ', not set yet'; return nm + (L.nudge ? `, moved ${fmtXte(L.nudge)}` : ''); }
+function lineDesc() { const L = job.lines[job.mode]; const nm = MODES[job.mode].name; if (job.mode === 'rounds') return L ? nm : nm + ', no boundary yet'; if (job.mode === 'nextrow') return nm; if (job.mode === 'lastpass' || job.mode === 'none') return nm; if (!L) return nm + ', not set yet'; return nm + (L.nudge ? `, moved ${fmtXte(L.nudge)}` : ''); }
 function refreshJobPanel() {
   const c2 = cov.cell ? cov.cell ** 2 : 0; $('jStart').textContent = new Date(job.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   $('jTot').textContent = fmtA(cov.tot * c2); $('jNet').textContent = fmtA(cov.net * c2); $('jOver').textContent = cov.tot ? ((cov.tot - cov.net) / cov.tot * 100).toFixed(1) + '%' : '0%';
